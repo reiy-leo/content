@@ -1,0 +1,9 @@
+# 复制成 .dev.vars 再填真值，.dev.vars 不入库
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+# 随机 32 字节以上，每个项目单独生成：openssl rand -base64 48
+SESSION_SECRET=
+# 管理员邮箱，逗号分隔
+ADMIN_EMAILS=reiy.leoz@gmail.com
+# IP 哈希用的盐，随机字符串
+IP_HASH_SALT=
