@@ -6,7 +6,7 @@ content：Rei 上传图片集，访客在公开页只看到马赛克图，凭获
 
 ## 当前阶段
 
-产品说明和数据模型在等 Rei 确认。确认前不写业务代码、不部署。
+MVP 已上线（2026-11-05）。付费版没做，只留了字段。
 
 ## 边界
 
@@ -23,25 +23,32 @@ content：Rei 上传图片集，访客在公开页只看到马赛克图，凭获
 - 包管理只用 pnpm。提交 `pnpm-lock.yaml`，不要 `package-lock.json`。
 - 登录：Google OAuth，管理员看 `ADMIN_EMAILS`（逗号分隔），默认 `reiy.leoz@gmail.com`。
 
-## 目录（计划）
+## 目录
 
 ```
-web/        前端（Vite + React + Kumo）
-worker/     Worker 代码
-migrations/ D1 迁移
-docs/       产品说明
-.agents/    给 agent 用的 skills、rules、prompts、memory
+src/          Worker：index.ts 路由，auth.ts 登录，admin.ts 后台接口，public.ts 公开接口和下载
+src/shared/   前后端共用类型、获取码规则
+web/          前端（Vite + React + Kumo），lib/preview.ts 在浏览器里生成马赛克图和缩略图
+migrations/   D1 迁移
+scripts/      build-inline-assets.mjs（前端内联进 Worker）、kumo-lint.mjs
+test/e2e.mjs  本地端到端检查（占位、并发下载、作废等）
+docs/         产品说明
+.agents/      给 agent 用的 skills（kumo-design）、rules、prompts、memory
 ```
 
-## 命令（计划）
+## 命令
 
 ```bash
 pnpm install
-pnpm dev          # 本地 wrangler dev，端口 8787
-pnpm build        # 打包前端并内联进 Worker
-pnpm deploy       # 部署到 content.rei8t.dev
-pnpm db:migrate   # 跑 D1 迁移
+pnpm db:migrate:local            # 本地 D1
+pnpm dev                         # 构建 + wrangler dev，端口 8787（.dev.vars 里 AUTH_DISABLED=true 可跳过登录）
+BASE=http://127.0.0.1:8787 pnpm test:e2e   # 另开终端跑端到端检查
+pnpm test                        # kumo 规则 + 类型检查
+pnpm db:migrate                  # 线上 D1 迁移
+pnpm deploy                      # 构建并部署到 content.rei8t.dev
 ```
+
+`src/assets.generated.ts` 由 `pnpm build` 生成，不入库。
 
 ## 约定
 
@@ -60,6 +67,7 @@ pnpm db:migrate   # 跑 D1 迁移
 
 ## 部署
 
-- Cloudflare 账号 `9151f72e404dd53f20b8e6667893237d`。
+- Cloudflare 账号 `9151f72e404dd53f20b8e6667893237d`。D1 `content-db`（86c3d103-2bad-4499-9196-239ddbc12460），R2 `content`。
+- Secrets：`GOOGLE_CLIENT_SECRET`、`SESSION_SECRET`、`IP_HASH_SALT`；`GOOGLE_CLIENT_ID` 和 `ADMIN_EMAILS` 写在 wrangler.jsonc 的 vars 里。
 - `wrangler.jsonc`：`workers_dev: false`，`routes: [{ "pattern": "content.rei8t.dev", "custom_domain": true }]`，`observability.enabled: true`。
 - Google Cloud 里要加回调：`https://content.rei8t.dev/auth/callback` 和 `http://localhost:8787/auth/callback`。

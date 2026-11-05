@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "content",
+  "account_id": "9151f72e404dd53f20b8e6667893237d",
+  // 前端打包后内联进脚本（src/assets.generated.ts）：用 API Token 部署时 Static Assets 上传会 401
+  "build": { "command": "pnpm build" },
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "content.rei8t.dev", "custom_domain": true }],
+  "observability": { "enabled": true },
+  // 保留控制台里加的变量 / secret
+  "keep_vars": true,
+  "d1_databases": [
+    { "binding": "DB", "database_name": "content-db", "database_id": "86c3d103-2bad-4499-9196-239ddbc12460", "migrations_dir": "migrations" }
+  ],
+  // 不开公共访问、不绑域名：原图只能经 Worker 鉴权拿
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "content" }],
+  // 填码 / 下载占位：每个 IP 每分钟 10 次
+  "ratelimits": [{ "name": "UNLOCK_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } }],
+  "vars": {
+    "ADMIN_EMAILS": "reiy.leoz@gmail.com",
+    "GOOGLE_CLIENT_ID": "71336458400-mc05m1fgb9fubeg1g8eckv3nhi1q2t6b.apps.googleusercontent.com"
+  }
+  // Secrets（不要提交；wrangler secret put …）：SESSION_SECRET（本项目单独生成）、GOOGLE_CLIENT_SECRET、IP_HASH_SALT
+  // Google OAuth 复用 Rei 各个 Worker 共用的 Web client；Google Cloud 里要加回调：
+  //   https://content.rei8t.dev/auth/callback 与 http://localhost:8787/auth/callback
+}

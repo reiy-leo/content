@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>原图获取</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // 主题初始化（渲染前执行，避免闪烁）：localStorage ct-theme = light | dark，缺省跟随系统
+      (function () {
+        var m = window.matchMedia("(prefers-color-scheme: dark)");
+        var set = function () {
+          var p = null;
+          try { p = localStorage.getItem("ct-theme"); } catch (e) {}
+          var dark = p === "dark" || (p !== "light" && m.matches);
+          document.documentElement.dataset.mode = dark ? "dark" : "light";
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        };
+        set();
+        m.addEventListener("change", set);
+      })();
+    </script>
+  </head>
+  <body class="bg-kumo-canvas text-kumo-default">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

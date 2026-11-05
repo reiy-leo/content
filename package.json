@@ -1,0 +1,39 @@
+{
+  "name": "content",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@12.14.0",
+  "scripts": {
+    "dev": "pnpm build && wrangler dev",
+    "dev:web": "vite",
+    "build": "vite build && node scripts/build-inline-assets.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "lint": "node scripts/kumo-lint.mjs",
+    "test": "node scripts/kumo-lint.mjs && pnpm typecheck",
+    "db:migrate:local": "wrangler d1 migrations apply content-db --local",
+    "db:migrate": "wrangler d1 migrations apply content-db --remote",
+    "deploy": "pnpm build && wrangler deploy",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "wrangler": "^4.157.0"
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "^2.17.0",
+    "lucide-react": "^1.68.0",
+    "nanoid": "^6.0.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

@@ -1,6 +1,6 @@
 # content 产品说明
 
-> 状态：草稿，等 Rei 过目（2026-11-05）。确认前不写代码、不部署。
+> 状态：Rei 2026-11-05 确认，按默认值实现，已上线。
 
 ## 一句话
 
@@ -41,7 +41,7 @@ Rei 上传图片集，访客在公开页面只能看到马赛克图；拿到获�
 1. 所有图只显示马赛克图。原图和缩略图都没有公开地址。
 2. 页面上有获取码输入框。填了以后：
    - 码不存在：「404 获取码不对」。
-   - 码过期或作废：「410 获取码已失效」，并写明哪天过期或已作废。
+   - 码过期或作废：提示「这个码已作废 / 已在某天过期，不能再下载」。下过的图照样显示缩略图。
    - 码可用：每张图下面出现「下载原图」按钮，顶部显示「还能下 x 张，码 11 月 12 日过期」。
 3. 下过的图：这张图换成清晰缩略图，按钮变成灰色「已下载」，不能再下。其他图照常能下。
 4. 「下载剩下的全部」按钮：逐张下载还没下过的图。
@@ -57,19 +57,19 @@ Rei 上传图片集，访客在公开页面只能看到马赛克图；拿到获�
 关键是先占位、再出文件，靠数据库唯一约束挡住并发。
 
 1. 访客点「下载原图」，前端 `POST /api/p/<slug>/downloads`，带上获取码和图片 ID。
-2. Worker 用一条 SQL 插入下载记录，同时检查码可用、图属于这个项目、项目已发布。`downloads` 表上有 `UNIQUE(code_id, image_id)`。
-   - 插入成功：占位完成，返回一张一次性下载票据（随机 32 字节），10 分钟内有效。
-   - 撞上唯一约束：返回「409 这张图已经用这个码下载过」。
-   - 两个请求同时来，只有一个能插进去，另一个拿到 409。
+2. Worker 在一个事务里跑两条 SQL，都带「码可用、图属于这个项目、项目已发布」的条件。`downloads` 表上有 `UNIQUE(code_id, image_id)`。
+   - 还没有记录：插入一条 `pending`，返回一次性下载票据（随机 43 位），10 分钟内有效。
+   - 已有 `pending`（点过下载、文件还没开始传）：换一张新票据，旧票据作废。
+   - 已经 `done`：返回「409 这张图已经用这个码下载过」。
 3. 前端拿票据跳到 `GET /dl/<ticket>`。Worker 把票据标成已用，再从 R2 流式读原图返回，带 `Content-Disposition: attachment` 和原文件名。
-4. 票据只能用一次。10 分钟没用，占位自动释放（下次请求时清理），这个码还能再下这张图。
-5. 票据一旦被打开、开始传输，就算下过了。传到一半断了也算。（见文末「待确认」第 1 条）
+4. 票据只能用一次：`pending → done` 只有一个请求能改成功，并发打开同一张或多张票据，只有一个拿到文件。
+5. 票据一旦被打开、开始传输，就算下过了，传到一半断了也算。票据过期没用，可以回页面重新点下载，换一张新票据。
 
 R2 桶不开公共访问，也不绑域名。原图只能从 `/dl/<ticket>` 拿。
 
 ## 防滥用
 
-- 填码接口按 IP 限流：每分钟 10 次，超了返回「429 请求太多」。码空间是 32⁸，约 1 万亿，配合限流猜不出来。
+- 填码和点下载按 IP 限流：各自每分钟 10 次，超了返回「429 请求太多」。码空间是 31⁸，约 8500 亿，配合限流猜不出来。
 - 票据有效期 10 分钟、只能用一次。
 - 后台所有接口都校验登录和白名单，并校验 Origin，防跨站请求。
 
@@ -166,27 +166,19 @@ D1 数据库 `content-db`，R2 桶 `content`。时间都存 Unix 毫秒（UTC）
 
 约束：`UNIQUE(code_id, image_id)`。这条就是「每码每图一次」的保证。
 
-### 占位那条 SQL（示意）
+### 占位的两条 SQL（示意，实际代码在 `src/public.ts`）
 
 ```sql
--- 先清掉这个码这张图已过期、没用过的占位
-DELETE FROM downloads
-WHERE code_id = ?1 AND image_id = ?2
-  AND status = 'pending' AND ticket_expires_at < ?now;
+-- 已有 pending：换新票据
+UPDATE downloads SET ticket_hash = ?hash, ticket_expires_at = ?now + 600000
+WHERE code_id = ?1 AND image_id = ?2 AND status = 'pending' AND <码可用且图属于项目>;
 
--- 再插入；条件不满足就插 0 行，撞唯一约束就报错（转成 409）
-INSERT INTO downloads (id, code_id, image_id, ticket_hash, ticket_expires_at, status, created_at)
-SELECT ?id, c.id, i.id, ?hash, ?now + 600000, 'pending', ?now
-FROM access_codes c
-JOIN images i ON i.project_id = c.project_id
-JOIN projects p ON p.id = c.project_id
-WHERE c.id = ?1 AND i.id = ?2
-  AND p.status = 'published'
-  AND c.revoked_at IS NULL
-  AND (c.expires_at IS NULL OR c.expires_at > ?now);
+-- 没有记录：插入 pending；已有记录（pending 或 done）就什么都不做
+INSERT INTO downloads (...) SELECT ... WHERE <码可用且图属于项目>
+ON CONFLICT (code_id, image_id) DO NOTHING;
 ```
 
-两条放进一个 `batch()`，D1 按事务执行。
+两条放进一个 `batch()`，D1 按事务执行。两条都没改到行：已有 `done` 就返回 409，否则 404。
 
 ### 用票据换文件
 
@@ -207,11 +199,11 @@ RETURNING image_id;
 | GET/POST | `/api/admin/projects` | 列表、新建 |
 | GET/PATCH/DELETE | `/api/admin/projects/:id` | 详情、改名改 slug、发布、删除 |
 | POST | `/api/admin/projects/:id/images` | 上传一张（multipart：原图 + 马赛克 + 缩略图） |
-| PATCH/DELETE | `/api/admin/images/:id` | 排序、删除 |
-| GET | `/api/admin/images/:id/original` | 管理员看原图 |
+| DELETE | `/api/admin/images/:id` | 删除 |
+| GET | `/api/admin/images/:id/original`、`/thumb`、`/mosaic` | 管理员看原图和预览图 |
 | GET/POST | `/api/admin/projects/:id/codes` | 码列表、批量生成 |
-| PATCH | `/api/admin/codes/:id` | 作废 |
-| POST | `/api/admin/codes/revoke` | 批量作废 |
+| POST | `/api/admin/projects/:id/codes/revoke` | 作废或恢复（`{ ids, restore }`），单个、批量都走这里 |
+| PUT | `/api/admin/projects/:id/images/order` | 保存排序 |
 | GET | `/api/admin/codes/:id/downloads` | 这个码的下载明细 |
 | GET | `/api/admin/projects/:id/codes.csv` | 导出 CSV |
 | GET | `/api/p/:slug` | 公开项目信息和图片列表（只有马赛克地址） |
@@ -229,8 +221,9 @@ RETURNING image_id;
 - 后端：Cloudflare Worker（TypeScript），D1，R2，Workers Rate Limiting。
 - 包管理 pnpm。前端打包后内联进 Worker 部署（Hark 的 token 走 Static Assets 上传会 401）。
 
-## 待确认
+## 已定（Rei 2026-11-05，按默认值）
 
-1. 下载传到一半断了，算不算用掉？我的默认：算。要更宽松，可以改成「票据 10 分钟内可以重复打开」，代价是这 10 分钟里链接转给别人也能下。
-2. 网站显示名。我的默认：中文「原图获取」，英文「Content」。
-3. 码的默认数量和有效期：默认一次 10 个、7 天。
+1. 下载传到一半断了也算用掉。
+2. 网站显示名：中文「原图获取」，英文「Content」。
+3. 码默认一次 10 个、7 天过期。
+4. Google OAuth 复用 Rei 各 Worker 共用的 Web client。
