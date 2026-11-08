@@ -218,7 +218,7 @@ RETURNING image_id;
 | GET | `/api/admin/images/:id/original`、`/thumb`、`/mosaic` | 管理员看原图和预览图 |
 | GET/POST | `/api/admin/projects/:id/codes` | 码列表、批量生成（`count`，有效期用 `expiresInHours`、`expiresInDays` 或 `expiresAt`） |
 | POST | `/api/admin/projects/:id/codes/revoke` | 作废或恢复（`{ ids, restore }`），单个、批量都走这里 |
-| POST | `/api/admin/projects/:id/codes/delete` | 删除获取码（`{ ids }`），单个、批量都走这里。只删过期、没下过图、也没有未过期下载票据的码，其余跳过，返回 `{ deleted, skipped }` |
+| POST | `/api/admin/projects/:id/codes/delete` | 删除获取码（`{ ids }`），单个、批量都走这里。只删过期或作废、没下过图、也没有未过期下载票据的码，其余跳过，返回 `{ deleted, skipped }` |
 | PUT | `/api/admin/projects/:id/images/order` | 保存排序 |
 | GET | `/api/admin/codes/:id/downloads` | 这个码的下载明细 |
 | GET | `/api/admin/projects/:id/codes.csv` | 导出 CSV |

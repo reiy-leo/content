@@ -193,8 +193,8 @@ export const ja: Dict = {
   deleteConfirmTitle: (n) => `期限切れのコード ${n} 個を削除しますか？`,
   deleteConfirmDesc: "元に戻せません。ダウンロード済みのコードは残ります。",
   codesDeletedToast: (n) => `${n} 個を削除しました`,
-  deleteSkipped: (n) => `${n} 個は使用済みか期限内のため削除していません`,
-  deleteOnlyExpired: "削除できるのは期限切れで未使用のコードだけです",
+  deleteSkipped: (n) => `${n} 個は使用済みか有効なため削除していません`,
+  deleteOnlyExpired: "削除できるのは期限切れか無効化済みで未使用のコードだけです",
 
   slugChangedWarn: "変更すると古いリンクは開けなくなります。新しいリンクを送り直してください。",
   slugHint: "小文字の英字、数字、ハイフン。",

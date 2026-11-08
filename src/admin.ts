@@ -353,7 +353,7 @@ export async function deleteCodes(req: Request, env: Env, projectId: string) {
   if (!Array.isArray(body.ids) || !body.ids.length) throw new HttpError(400, "no_codes_selected");
   const ids = [...new Set(body.ids.slice(0, 500).map(String))];
   const at = now();
-  const deletable = `id = ?1 AND project_id = ?2 AND expires_at IS NOT NULL AND expires_at <= ?3
+  const deletable = `id = ?1 AND project_id = ?2 AND (revoked_at IS NOT NULL OR (expires_at IS NOT NULL AND expires_at <= ?3))
     AND NOT EXISTS (SELECT 1 FROM downloads d WHERE d.code_id = access_codes.id AND (d.status = 'done' OR d.ticket_expires_at > ?3))`;
   const res = await env.DB.batch(
     ids.flatMap((id) => [

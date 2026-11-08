@@ -193,8 +193,8 @@ export const zh = {
   deleteConfirmTitle: (n: number) => `删除 ${n} 个过期获取码？`,
   deleteConfirmDesc: "删了就找不回来。下载过图的码不会删。",
   codesDeletedToast: (n: number) => `已删除 ${n} 个`,
-  deleteSkipped: (n: number) => `${n} 个下载过图或还没过期，没删`,
-  deleteOnlyExpired: "只能删过期且没下载过的码",
+  deleteSkipped: (n: number) => `${n} 个下载过图或还能用，没删`,
+  deleteOnlyExpired: "只能删过期或作废、且没下载过的码",
 
   slugChangedWarn: "改了以后旧链接会打不开，发出去的链接要重新发。",
   slugHint: "小写字母、数字和横线。",

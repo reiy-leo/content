@@ -102,6 +102,9 @@ ok(g1h.status === 201 && d1h > 59 * 60e3 && d1h <= 60 * 60e3, "1 小时码过期
   ok(del.status === 200 && del.body.deleted === 1 && del.body.skipped === 2, `只删掉过期没用的 1 个，跳过没过期的和下过图的（${JSON.stringify(del.body)}）`);
   const after = (await j(`/api/admin/projects/${pid}/codes`)).body;
   ok(!after.some((x) => x.code === e1) && after.some((x) => x.code === e2) && after.some((x) => x.code === c1), "删后列表对");
+  await j(`/api/admin/projects/${pid}/codes/revoke`, { method: "POST", json: { ids: [id(e2)] } });
+  const d2 = await j(`/api/admin/projects/${pid}/codes/delete`, { method: "POST", json: { ids: [id(e2)] } });
+  ok(d2.body.deleted === 1, "作废但没过期、没下过图的码能删");
   ok((await j(`/api/admin/projects/${pid}/codes/delete`, { method: "POST", json: { ids: [] } })).status === 400, "没选码 400");
 }
 

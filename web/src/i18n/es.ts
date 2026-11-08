@@ -198,8 +198,8 @@ export const es: Dict = {
   deleteConfirmTitle: (n) => `¿Eliminar ${codes(n)} ${pick(n, "caducado", "caducados")}?`,
   deleteConfirmDesc: "No se puede deshacer. Los códigos que ya descargaron imágenes se conservan.",
   codesDeletedToast: (n) => `${pick(n, "Se eliminó", "Se eliminaron")} ${codes(n)}`,
-  deleteSkipped: (n) => `${n} sin eliminar: ya usados o aún vigentes`,
-  deleteOnlyExpired: "Solo se pueden eliminar códigos caducados sin descargas",
+  deleteSkipped: (n) => `${n} sin eliminar: ya usados o aún activos`,
+  deleteOnlyExpired: "Solo se pueden eliminar códigos caducados o anulados sin descargas",
 
   slugChangedWarn: "Si lo cambias, el enlace anterior dejará de funcionar y tendrás que enviar el nuevo.",
   slugHint: "Minúsculas, números y guiones.",

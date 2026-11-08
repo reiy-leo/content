@@ -197,8 +197,8 @@ export const en: Dict = {
   deleteConfirmTitle: (n) => `Delete ${n} expired ${pick(n, "code", "codes")}?`,
   deleteConfirmDesc: "This can't be undone. Codes that have downloaded images are kept.",
   codesDeletedToast: (n) => `Deleted ${n} ${pick(n, "code", "codes")}`,
-  deleteSkipped: (n) => `${n} skipped: already used or not expired yet`,
-  deleteOnlyExpired: "Only expired codes with no downloads can be deleted",
+  deleteSkipped: (n) => `${n} skipped: already used or still active`,
+  deleteOnlyExpired: "Only expired or revoked codes with no downloads can be deleted",
 
   slugChangedWarn: "Changing it breaks the old link. You'll need to resend the new one.",
   slugHint: "Lowercase letters, numbers and hyphens.",

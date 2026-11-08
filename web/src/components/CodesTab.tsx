@@ -99,7 +99,8 @@ function NewCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: (
 }
 
 /** 过期了、一张没下过的码才能删（后端会再查一遍，还会跳过有未过期下载票据的码） */
-const canDelete = (c: AdminCode, at = Date.now()) => c.expiresAt !== null && c.expiresAt <= at && c.downloaded === 0;
+const canDelete = (c: AdminCode, at = Date.now()) =>
+  (c.revokedAt !== null || (c.expiresAt !== null && c.expiresAt <= at)) && c.downloaded === 0;
 
 function DeleteDialog({ ids, busy, onConfirm, onClose }: { ids: string[] | null; busy: boolean; onConfirm: () => void; onClose: () => void }) {
   const { t } = useI18n();

@@ -200,8 +200,8 @@ export const fr: Dict = {
   deleteConfirmTitle: (n) => `Supprimer ${codes(n)} ${s(n, "expiré", "expirés")} ?`,
   deleteConfirmDesc: "Action irréversible. Les codes ayant servi à télécharger sont conservés.",
   codesDeletedToast: (n) => `${codes(n)} ${s(n, "supprimé", "supprimés")}`,
-  deleteSkipped: (n) => `${n} ignorés : déjà utilisés ou encore valides`,
-  deleteOnlyExpired: "Seuls les codes expirés sans téléchargement peuvent être supprimés",
+  deleteSkipped: (n) => `${n} ignorés : déjà utilisés ou encore actifs`,
+  deleteOnlyExpired: "Seuls les codes expirés ou révoqués sans téléchargement peuvent être supprimés",
 
   slugChangedWarn: "Si vous le modifiez, l'ancien lien ne marchera plus et il faudra renvoyer le nouveau.",
   slugHint: "Minuscules, chiffres et tirets.",

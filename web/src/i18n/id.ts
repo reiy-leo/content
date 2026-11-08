@@ -193,8 +193,8 @@ export const id: Dict = {
   deleteConfirmTitle: (n) => `Hapus ${n} kode kedaluwarsa?`,
   deleteConfirmDesc: "Tidak bisa dibatalkan. Kode yang sudah dipakai mengunduh tetap disimpan.",
   codesDeletedToast: (n) => `${n} kode dihapus`,
-  deleteSkipped: (n) => `${n} dilewati: sudah dipakai atau belum kedaluwarsa`,
-  deleteOnlyExpired: "Hanya kode kedaluwarsa tanpa unduhan yang bisa dihapus",
+  deleteSkipped: (n) => `${n} dilewati: sudah dipakai atau masih aktif`,
+  deleteOnlyExpired: "Hanya kode kedaluwarsa atau dibatalkan tanpa unduhan yang bisa dihapus",
 
   slugChangedWarn: "Kalau diubah, tautan lama tidak bisa dibuka dan tautan baru perlu dikirim ulang.",
   slugHint: "Huruf kecil, angka, dan tanda hubung.",
