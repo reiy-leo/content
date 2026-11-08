@@ -193,6 +193,13 @@ export const pt: Dict = {
   downloadDetails: "Detalhes dos downloads",
   restoredToast: (n) => `${codes(n)} ${pick(n, "restaurado", "restaurados")}`,
   revokedToast: (n) => `${codes(n)} ${pick(n, "revogado", "revogados")}`,
+  deleteCode: "Excluir",
+  deleteSelected: (n) => `Excluir ${n} ${pick(n, "selecionado", "selecionados")}`,
+  deleteConfirmTitle: (n) => `Excluir ${codes(n)} ${pick(n, "expirado", "expirados")}?`,
+  deleteConfirmDesc: "Não dá para desfazer. Códigos que já baixaram imagens são mantidos.",
+  codesDeletedToast: (n) => `${codes(n)} ${pick(n, "excluído", "excluídos")}`,
+  deleteSkipped: (n) => `${n} não excluídos: já usados ou ainda válidos`,
+  deleteOnlyExpired: "Só dá para excluir códigos expirados sem downloads",
 
   slugChangedWarn: "Se mudar, o link antigo para de funcionar e você vai precisar enviar o novo.",
   slugHint: "Letras minúsculas, números e hífens.",

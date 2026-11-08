@@ -193,6 +193,13 @@ export const es: Dict = {
   downloadDetails: "Detalle de descargas",
   restoredToast: (n) => `${pick(n, "Se restauró", "Se restauraron")} ${codes(n)}`,
   revokedToast: (n) => `${pick(n, "Se anuló", "Se anularon")} ${codes(n)}`,
+  deleteCode: "Eliminar",
+  deleteSelected: (n) => `Eliminar ${n} ${pick(n, "seleccionado", "seleccionados")}`,
+  deleteConfirmTitle: (n) => `¿Eliminar ${codes(n)} ${pick(n, "caducado", "caducados")}?`,
+  deleteConfirmDesc: "No se puede deshacer. Los códigos que ya descargaron imágenes se conservan.",
+  codesDeletedToast: (n) => `${pick(n, "Se eliminó", "Se eliminaron")} ${codes(n)}`,
+  deleteSkipped: (n) => `${n} sin eliminar: ya usados o aún vigentes`,
+  deleteOnlyExpired: "Solo se pueden eliminar códigos caducados sin descargas",
 
   slugChangedWarn: "Si lo cambias, el enlace anterior dejará de funcionar y tendrás que enviar el nuevo.",
   slugHint: "Minúsculas, números y guiones.",

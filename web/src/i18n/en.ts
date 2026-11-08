@@ -192,6 +192,13 @@ export const en: Dict = {
   downloadDetails: "Download details",
   restoredToast: (n) => `Restored ${n} ${pick(n, "code", "codes")}`,
   revokedToast: (n) => `Revoked ${n} ${pick(n, "code", "codes")}`,
+  deleteCode: "Delete",
+  deleteSelected: (n) => `Delete ${n} selected`,
+  deleteConfirmTitle: (n) => `Delete ${n} expired ${pick(n, "code", "codes")}?`,
+  deleteConfirmDesc: "This can't be undone. Codes that have downloaded images are kept.",
+  codesDeletedToast: (n) => `Deleted ${n} ${pick(n, "code", "codes")}`,
+  deleteSkipped: (n) => `${n} skipped: already used or not expired yet`,
+  deleteOnlyExpired: "Only expired codes with no downloads can be deleted",
 
   slugChangedWarn: "Changing it breaks the old link. You'll need to resend the new one.",
   slugHint: "Lowercase letters, numbers and hyphens.",

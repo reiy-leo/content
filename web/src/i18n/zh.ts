@@ -188,6 +188,13 @@ export const zh = {
   downloadDetails: "下载明细",
   restoredToast: (n: number) => `已恢复 ${n} 个`,
   revokedToast: (n: number) => `已作废 ${n} 个`,
+  deleteCode: "删除",
+  deleteSelected: (n: number) => `删除选中的 ${n} 个`,
+  deleteConfirmTitle: (n: number) => `删除 ${n} 个过期获取码？`,
+  deleteConfirmDesc: "删了就找不回来。下载过图的码不会删。",
+  codesDeletedToast: (n: number) => `已删除 ${n} 个`,
+  deleteSkipped: (n: number) => `${n} 个下载过图或还没过期，没删`,
+  deleteOnlyExpired: "只能删过期且没下载过的码",
 
   slugChangedWarn: "改了以后旧链接会打不开，发出去的链接要重新发。",
   slugHint: "小写字母、数字和横线。",

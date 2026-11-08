@@ -188,6 +188,13 @@ export const id: Dict = {
   downloadDetails: "Riwayat unduhan",
   restoredToast: (n) => `${n} kode dipulihkan`,
   revokedToast: (n) => `${n} kode dicabut`,
+  deleteCode: "Hapus",
+  deleteSelected: (n) => `Hapus ${n} yang dipilih`,
+  deleteConfirmTitle: (n) => `Hapus ${n} kode kedaluwarsa?`,
+  deleteConfirmDesc: "Tidak bisa dibatalkan. Kode yang sudah dipakai mengunduh tetap disimpan.",
+  codesDeletedToast: (n) => `${n} kode dihapus`,
+  deleteSkipped: (n) => `${n} dilewati: sudah dipakai atau belum kedaluwarsa`,
+  deleteOnlyExpired: "Hanya kode kedaluwarsa tanpa unduhan yang bisa dihapus",
 
   slugChangedWarn: "Kalau diubah, tautan lama tidak bisa dibuka dan tautan baru perlu dikirim ulang.",
   slugHint: "Huruf kecil, angka, dan tanda hubung.",

@@ -1,7 +1,7 @@
-// 获取码：批量生成（数量、有效期、备注）→ 列表看状态和使用情况 → 单个或批量作废 / 恢复、导出 CSV、看下载明细。
+// 获取码：批量生成（数量、有效期、备注）→ 列表看状态和使用情况 → 单个或批量作废 / 恢复、删除过期没用过的码、导出 CSV、看下载明细。
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Banner, Button, Dialog, Empty, InlineCopyText, Input, Loader, Select, Table, Text, useKumoToastManager } from "@cloudflare/kumo";
-import { AlertCircle, Ban, Copy, FileDown, KeyRound, ListChecks, Plus, RotateCcw } from "lucide-react";
+import { AlertCircle, Ban, Copy, FileDown, KeyRound, ListChecks, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { AdminCode, CodeDownload, CodeStatus, ProjectSummary } from "../../../src/shared/types.ts";
 import { api, errMsg } from "../api.ts";
 import { copyText, fmtTime } from "../lib/format.ts";
@@ -98,6 +98,27 @@ function NewCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: (
   );
 }
 
+/** 过期了、一张没下过的码才能删（后端会再查一遍，还会跳过有未过期下载票据的码） */
+const canDelete = (c: AdminCode, at = Date.now()) => c.expiresAt !== null && c.expiresAt <= at && c.downloaded === 0;
+
+function DeleteDialog({ ids, busy, onConfirm, onClose }: { ids: string[] | null; busy: boolean; onConfirm: () => void; onClose: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Dialog.Root open={ids !== null} onOpenChange={(v) => !v && onClose()}>
+      <Dialog size="base" className="px-6 py-5">
+        <div className="grid gap-4">
+          <Dialog.Title className="text-base font-semibold">{t.deleteConfirmTitle(ids?.length ?? 0)}</Dialog.Title>
+          <Text variant="secondary">{t.deleteConfirmDesc}</Text>
+          <div className="flex justify-end gap-2">
+            <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
+            <Button variant="destructive" icon={<Trash2 size={16} />} loading={busy} onClick={onConfirm}>{t.deleteCode}</Button>
+          </div>
+        </div>
+      </Dialog>
+    </Dialog.Root>
+  );
+}
+
 function DownloadsDialog({ code, imageCount, onClose }: { code: AdminCode | null; imageCount: number; onClose: () => void }) {
   const { t } = useI18n();
   const [rows, setRows] = useState<CodeDownload[] | null>(null);
@@ -160,6 +181,7 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
   const [fresh, setFresh] = useState<string[] | null>(null);
   const [detail, setDetail] = useState<AdminCode | null>(null);
   const [busy, setBusy] = useState(false);
+  const [toDelete, setToDelete] = useState<string[] | null>(null);
 
   const load = useCallback(() => {
     api<AdminCode[]>(`/api/admin/projects/${project.id}/codes`).then(
@@ -196,6 +218,23 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
     }
   };
 
+  const removeCodes = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const r = await api<{ deleted: number; skipped: number }>(`/api/admin/projects/${project.id}/codes/delete`, { method: "POST", json: { ids } });
+      toast.add({ title: t.codesDeletedToast(r.deleted), description: r.skipped ? t.deleteSkipped(r.skipped) : undefined });
+      setSelected(new Set());
+      setToDelete(null);
+      load();
+      void reload();
+    } catch (e) {
+      toast.add({ title: t.actionFailed, description: errMsg(e), variant: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const deletableSelected = (codes ?? []).filter((c) => selected.has(c.id) && canDelete(c)).map((c) => c.id);
+
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s);
@@ -225,6 +264,15 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
             <>
               <Button variant="secondary" icon={<Ban size={16} />} loading={busy} onClick={() => setRevoked([...selected], false)}>{t.revokeSelected(selected.size)}</Button>
               <Button variant="secondary" icon={<RotateCcw size={16} />} disabled={busy} onClick={() => setRevoked([...selected], true)}>{t.restore}</Button>
+              <Button
+                variant="secondary"
+                icon={<Trash2 size={16} />}
+                disabled={busy || !deletableSelected.length}
+                title={deletableSelected.length ? undefined : t.deleteOnlyExpired}
+                onClick={() => setToDelete(deletableSelected)}
+              >
+                {t.deleteSelected(deletableSelected.length)}
+              </Button>
             </>
           )}
           <Button
@@ -294,6 +342,16 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
                       ) : (
                         <Button variant="ghost" size="xs" shape="square" icon={<Ban size={14} />} aria-label={t.revoke} title={t.revoke} disabled={busy} onClick={() => setRevoked([c.id], false)} />
                       )}
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        shape="square"
+                        icon={<Trash2 size={14} />}
+                        aria-label={t.deleteCode}
+                        title={canDelete(c) ? t.deleteCode : t.deleteOnlyExpired}
+                        disabled={busy || !canDelete(c)}
+                        onClick={() => setToDelete([c.id])}
+                      />
                     </div>
                   </Table.Cell>
                 </Table.Row>
@@ -314,6 +372,7 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
         }}
       />
       <NewCodesDialog codes={fresh} onClose={() => setFresh(null)} />
+      <DeleteDialog ids={toDelete} busy={busy} onConfirm={() => toDelete && void removeCodes(toDelete)} onClose={() => setToDelete(null)} />
       <DownloadsDialog code={detail} imageCount={imageCount} onClose={() => setDetail(null)} />
     </div>
   );

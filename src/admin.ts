@@ -343,6 +343,28 @@ export async function revokeCodes(req: Request, env: Env, projectId: string) {
   return json({ ok: true });
 }
 
+/**
+ * 删除获取码：只删已过期、没下过图、也没有还在有效期内的下载票据的码，其余跳过。
+ * 先删它们的过期占位记录，再删码；条件写在 SQL 里，和下载占位不会撞车。
+ */
+export async function deleteCodes(req: Request, env: Env, projectId: string) {
+  await getProject(env, projectId);
+  const body = await readJson<{ ids?: string[] }>(req);
+  if (!Array.isArray(body.ids) || !body.ids.length) throw new HttpError(400, "no_codes_selected");
+  const ids = [...new Set(body.ids.slice(0, 500).map(String))];
+  const at = now();
+  const deletable = `id = ?1 AND project_id = ?2 AND expires_at IS NOT NULL AND expires_at <= ?3
+    AND NOT EXISTS (SELECT 1 FROM downloads d WHERE d.code_id = access_codes.id AND (d.status = 'done' OR d.ticket_expires_at > ?3))`;
+  const res = await env.DB.batch(
+    ids.flatMap((id) => [
+      env.DB.prepare(`DELETE FROM downloads WHERE code_id IN (SELECT id FROM access_codes WHERE ${deletable})`).bind(id, projectId, at),
+      env.DB.prepare(`DELETE FROM access_codes WHERE ${deletable}`).bind(id, projectId, at),
+    ]),
+  );
+  const deleted = res.filter((_, i) => i % 2 === 1).reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  return json({ deleted, skipped: ids.length - deleted });
+}
+
 export async function codeDownloads(env: Env, codeId: string) {
   const { results } = await env.DB.prepare(
     `SELECT d.image_id, i.filename, d.status, d.created_at, d.completed_at

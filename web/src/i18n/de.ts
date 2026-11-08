@@ -193,6 +193,13 @@ export const de: Dict = {
   downloadDetails: "Download-Details",
   restoredToast: (n) => `${codes(n)} wiederhergestellt`,
   revokedToast: (n) => `${codes(n)} widerrufen`,
+  deleteCode: "Löschen",
+  deleteSelected: (n) => `${n} ausgewählte löschen`,
+  deleteConfirmTitle: (n) => `${pick(n, "Abgelaufenen", "Abgelaufene")} ${codes(n)} löschen?`,
+  deleteConfirmDesc: "Das lässt sich nicht rückgängig machen. Codes mit Downloads bleiben erhalten.",
+  codesDeletedToast: (n) => `${codes(n)} gelöscht`,
+  deleteSkipped: (n) => `${n} übersprungen: schon benutzt oder noch gültig`,
+  deleteOnlyExpired: "Nur abgelaufene Codes ohne Downloads lassen sich löschen",
 
   slugChangedWarn: "Wenn du ihn änderst, funktioniert der alte Link nicht mehr und du musst den neuen verschicken.",
   slugHint: "Kleinbuchstaben, Ziffern und Bindestriche.",

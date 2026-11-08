@@ -188,6 +188,13 @@ export const ja: Dict = {
   downloadDetails: "ダウンロード履歴",
   restoredToast: (n) => `${n} 個を元に戻しました`,
   revokedToast: (n) => `${n} 個を無効化しました`,
+  deleteCode: "削除",
+  deleteSelected: (n) => `選んだ ${n} 個を削除`,
+  deleteConfirmTitle: (n) => `期限切れのコード ${n} 個を削除しますか？`,
+  deleteConfirmDesc: "元に戻せません。ダウンロード済みのコードは残ります。",
+  codesDeletedToast: (n) => `${n} 個を削除しました`,
+  deleteSkipped: (n) => `${n} 個は使用済みか期限内のため削除していません`,
+  deleteOnlyExpired: "削除できるのは期限切れで未使用のコードだけです",
 
   slugChangedWarn: "変更すると古いリンクは開けなくなります。新しいリンクを送り直してください。",
   slugHint: "小文字の英字、数字、ハイフン。",

@@ -194,6 +194,13 @@ export const ru: Dict = {
   downloadDetails: "Подробности скачиваний",
   restoredToast: (n) => `Восстановлено: ${codes(n)}`,
   revokedToast: (n) => `Отозвано: ${codes(n)}`,
+  deleteCode: "Удалить",
+  deleteSelected: (n) => `Удалить выбранные: ${n}`,
+  deleteConfirmTitle: (n) => `Удалить истёкшие коды: ${n}?`,
+  deleteConfirmDesc: "Это нельзя отменить. Коды, по которым уже скачивали, останутся.",
+  codesDeletedToast: (n) => `Удалено: ${codes(n)}`,
+  deleteSkipped: (n) => `Не удалено: ${n} (уже использованы или ещё действуют)`,
+  deleteOnlyExpired: "Удалять можно только истёкшие коды без скачиваний",
 
   slugChangedWarn: "После изменения старая ссылка перестанет работать, новую придётся разослать заново.",
   slugHint: "Строчные латинские буквы, цифры и дефисы.",

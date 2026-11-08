@@ -195,6 +195,13 @@ export const fr: Dict = {
   downloadDetails: "Détail des téléchargements",
   restoredToast: (n) => `${codes(n)} ${s(n, "restauré", "restaurés")}`,
   revokedToast: (n) => `${codes(n)} ${s(n, "révoqué", "révoqués")}`,
+  deleteCode: "Supprimer",
+  deleteSelected: (n) => `Supprimer ${n} ${s(n, "sélectionné", "sélectionnés")}`,
+  deleteConfirmTitle: (n) => `Supprimer ${codes(n)} ${s(n, "expiré", "expirés")} ?`,
+  deleteConfirmDesc: "Action irréversible. Les codes ayant servi à télécharger sont conservés.",
+  codesDeletedToast: (n) => `${codes(n)} ${s(n, "supprimé", "supprimés")}`,
+  deleteSkipped: (n) => `${n} ignorés : déjà utilisés ou encore valides`,
+  deleteOnlyExpired: "Seuls les codes expirés sans téléchargement peuvent être supprimés",
 
   slugChangedWarn: "Si vous le modifiez, l'ancien lien ne marchera plus et il faudra renvoyer le nouveau.",
   slugHint: "Minuscules, chiffres et tirets.",

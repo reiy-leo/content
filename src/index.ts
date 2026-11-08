@@ -120,6 +120,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         if (m === "POST") return admin.createCodes(req, env, r[1]!);
       }
       if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\/revoke$/)) && m === "POST") return admin.revokeCodes(req, env, r[1]!);
+      if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\/delete$/)) && m === "POST") return admin.deleteCodes(req, env, r[1]!);
       if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\.csv$/)) && m === "GET") return admin.codesCsv(env, r[1]!, url.searchParams.get("lang"));
       if ((r = sub.match(/^\/codes\/([\w-]+)\/downloads$/)) && m === "GET") return admin.codeDownloads(env, r[1]!);
       if ((r = sub.match(/^\/images\/([\w-]+)$/)) && m === "DELETE") return admin.deleteImage(env, r[1]!);

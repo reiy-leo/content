@@ -89,6 +89,22 @@ const g1h = await j(`/api/admin/projects/${pid}/codes`, { method: "POST", json: 
 const d1h = g1h.body.expiresAt - Date.now();
 ok(g1h.status === 201 && d1h > 59 * 60e3 && d1h <= 60 * 60e3, "1 小时码过期时间对");
 
+// 删除获取码：只删过期且没下过图的
+{
+  const { execSync } = await import("node:child_process");
+  const g = await j(`/api/admin/projects/${pid}/codes`, { method: "POST", json: { count: 2 } });
+  const [e1, e2] = g.body.codes;
+  const norm = (c) => c.replace(/-/g, "").toUpperCase();
+  execSync(`pnpm -s exec wrangler d1 execute content-db --local --command "UPDATE access_codes SET expires_at = 1 WHERE code IN ('${norm(e1)}', '${norm(c1)}')"`, { stdio: "ignore" });
+  const ls = (await j(`/api/admin/projects/${pid}/codes`)).body;
+  const id = (c) => ls.find((x) => x.code === c).id;
+  const del = await j(`/api/admin/projects/${pid}/codes/delete`, { method: "POST", json: { ids: [id(e1), id(e2), id(c1)] } });
+  ok(del.status === 200 && del.body.deleted === 1 && del.body.skipped === 2, `只删掉过期没用的 1 个，跳过没过期的和下过图的（${JSON.stringify(del.body)}）`);
+  const after = (await j(`/api/admin/projects/${pid}/codes`)).body;
+  ok(!after.some((x) => x.code === e1) && after.some((x) => x.code === e2) && after.some((x) => x.code === c1), "删后列表对");
+  ok((await j(`/api/admin/projects/${pid}/codes/delete`, { method: "POST", json: { ids: [] } })).status === 400, "没选码 400");
+}
+
 // 免码：默认要码；不带码下载 403
 ok((await j(`/api/p/${slug}`)).body.codeRequired === true, "默认要获取码");
 ok((await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } })).status === 403, "要码时不带码下载 403");
