@@ -1,7 +1,7 @@
 import type { Dict } from "./zh.ts";
 
 export const id: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "Admin",
   theme: "Tema",
   themeLight: "Terang",

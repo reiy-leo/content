@@ -6,7 +6,7 @@ const codes = (n: number) => `${n} ${pick(n, "Code", "Codes")}`;
 const dls = (n: number) => `${n} ${pick(n, "Download", "Downloads")}`;
 
 export const de: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "Admin",
   theme: "Design",
   themeLight: "Hell",

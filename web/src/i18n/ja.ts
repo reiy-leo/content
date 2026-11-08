@@ -1,7 +1,7 @@
 import type { Dict } from "./zh.ts";
 
 export const ja: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "管理",
   theme: "テーマ",
   themeLight: "ライト",

@@ -8,7 +8,7 @@ const codes = (n: number) => `${n} ${s(n, "code", "codes")}`;
 const dls = (n: number) => `${n} ${s(n, "téléchargement", "téléchargements")}`;
 
 export const fr: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "Admin",
   theme: "Thème",
   themeLight: "Clair",

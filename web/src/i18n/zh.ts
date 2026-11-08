@@ -1,7 +1,7 @@
 // 简体中文，源语言。其他语言文件的键要和这里一一对应（类型 Dict 会检查）。
 // 带参数的文案写成函数；日期已经按当前语言格式化好再传进来。
 export const zh = {
-  appName: "原图获取",
+  appName: "内容快递",
   adminBadge: "后台",
   theme: "主题",
   themeLight: "浅色",

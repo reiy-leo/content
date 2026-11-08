@@ -241,7 +241,7 @@ RETURNING image_id;
 - 状态码出现在界面上时，带一句当前语言的说明，如「403 无权限」「403 Forbidden」。
 - `/dl/<ticket>` 出错时是服务端直接出的页面：先看 cookie `ct-lang`，没有就看 `Accept-Language`。
 - 导出 CSV 时带上当前语言（`?lang=en`），表头和状态用这种语言；不带就是中文。
-- 站名：中文「原图获取」，其他语言都叫「Content」。
+- 站名：中文「内容快递」，其他语言都叫「Content Drop」（Rei 2026-11-08 改名）。
 - 联系方式（hi@rei8t.dev、微信 antitsunny）各语言都一样，不翻译。
 
 ## 技术栈
@@ -253,7 +253,7 @@ RETURNING image_id;
 ## 已定（Rei 2026-11-05，按默认值）
 
 1. 下载传到一半断了也算用掉。
-2. 网站显示名：中文「原图获取」，英文「Content」。
+2. 网站显示名：中文「内容快递」，英文「Content Drop」（2026-11-08 改，原来是「原图获取」）。
 3. 码默认一次 10 个、7 天过期。
 4. Google OAuth 复用 Rei 各 Worker 共用的 Web client。
 

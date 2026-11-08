@@ -5,7 +5,7 @@ const imgs = (n: number) => `${n} ${pick(n, "image", "images")}`;
 const times = (n: number) => `${n} ${pick(n, "time", "times")}`;
 
 export const en: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "Admin",
   theme: "Theme",
   themeLight: "Light",

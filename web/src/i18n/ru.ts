@@ -7,7 +7,7 @@ const dls = (n: number) => `${n} ${p(n, "скачивание", "скачива�
 const times = (n: number) => `${n} ${p(n, "раз", "раза", "раз")}`;
 
 export const ru: Dict = {
-  appName: "Content",
+  appName: "Content Drop",
   adminBadge: "Админка",
   theme: "Тема",
   themeLight: "Светлая",
