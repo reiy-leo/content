@@ -18,7 +18,13 @@
   // 不开公共访问、不绑域名：原图只能经 Worker 鉴权拿
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "content" }],
   // 填码 / 下载占位：每个 IP 每分钟 10 次
-  "ratelimits": [{ "name": "UNLOCK_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } }],
+  // 免码下载：每个 IP 每分钟 50 次
+  "ratelimits": [
+    { "name": "UNLOCK_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } },
+    { "name": "FREE_LIMITER", "namespace_id": "4202", "simple": { "limit": 50, "period": 60 } }
+  ],
+  // 每天北京时间 3:00（UTC 19:00）清理过期没用过的获取码和没打开的票据
+  "triggers": { "crons": ["0 19 * * *"] },
   "vars": {
     "ADMIN_EMAILS": "reiy.leoz@gmail.com",
     "GOOGLE_CLIENT_ID": "71336458400-mc05m1fgb9fubeg1g8eckv3nhi1q2t6b.apps.googleusercontent.com"

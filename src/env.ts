@@ -3,6 +3,8 @@ export interface Env {
   BUCKET: R2Bucket;
   /** 填码 / 占位接口的按 IP 限流（Workers Rate Limiting）。本地没有时跳过。 */
   UNLOCK_LIMITER?: RateLimit;
+  /** 免码下载的按 IP 限流，每分钟 50 次。本地没有时跳过。 */
+  FREE_LIMITER?: RateLimit;
 
   // secrets
   SESSION_SECRET?: string;

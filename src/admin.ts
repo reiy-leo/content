@@ -9,22 +9,30 @@ import { SLUG_RE, formatCode, type AdminCode, type AdminImage, type CodeDownload
 export const MAX_ORIGINAL_BYTES = 95 * 1024 * 1024;
 const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
-const DAY = 24 * 60 * 60 * 1000;
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+const MAX_DOWNLOADS_LIMIT = 1_000_000;
 
 interface ProjectRow {
   id: string; slug: string; title: string; description: string | null; status: "draft" | "published";
   created_at: number; updated_at: number; published_at: number | null; image_count?: number; code_count?: number;
+  code_required: number; max_downloads: number | null; free_downloads?: number; used_codes?: number;
 }
 
 const toSummary = (r: ProjectRow): ProjectSummary => ({
   id: r.id, slug: r.slug, title: r.title, description: r.description, status: r.status,
   imageCount: r.image_count ?? 0, codeCount: r.code_count ?? 0,
+  codeRequired: r.code_required !== 0, maxDownloads: r.max_downloads,
+  freeDownloads: r.free_downloads ?? 0, usedCodes: r.used_codes ?? 0,
   createdAt: r.created_at, updatedAt: r.updated_at, publishedAt: r.published_at,
 });
 
 const PROJECT_SELECT = `SELECT p.*,
   (SELECT COUNT(*) FROM images i WHERE i.project_id = p.id) AS image_count,
-  (SELECT COUNT(*) FROM access_codes c WHERE c.project_id = p.id) AS code_count
+  (SELECT COUNT(*) FROM access_codes c WHERE c.project_id = p.id) AS code_count,
+  (SELECT COUNT(*) FROM free_downloads f WHERE f.project_id = p.id AND f.status = 'done') AS free_downloads,
+  (SELECT COUNT(DISTINCT d.code_id) FROM downloads d JOIN access_codes c ON c.id = d.code_id
+     WHERE c.project_id = p.id AND d.status = 'done') AS used_codes
   FROM projects p`;
 
 async function getProject(env: Env, id: string): Promise<ProjectRow> {
@@ -98,10 +106,26 @@ export async function getProjectDetail(env: Env, id: string) {
 
 export async function updateProject(req: Request, env: Env, id: string) {
   const p = await getProject(env, id);
-  const body = await readJson<{ title?: string; slug?: string; description?: string | null; status?: string }>(req);
+  const body = await readJson<{
+    title?: string; slug?: string; description?: string | null; status?: string; codeRequired?: boolean; maxDownloads?: number | null;
+  }>(req);
   const title = body.title !== undefined ? cleanTitle(body.title) : p.title;
   const slug = body.slug !== undefined ? cleanSlug(body.slug) : p.slug;
   const description = body.description !== undefined ? cleanDescription(body.description) : p.description;
+  let codeRequired = p.code_required;
+  if (body.codeRequired !== undefined) {
+    if (typeof body.codeRequired !== "boolean") throw new HttpError(400, "codeRequired 只能是 true 或 false");
+    codeRequired = body.codeRequired ? 1 : 0;
+  }
+  let maxDownloads = p.max_downloads;
+  if (body.maxDownloads !== undefined) {
+    if (body.maxDownloads === null) maxDownloads = null;
+    else {
+      const n = Number(body.maxDownloads);
+      if (!Number.isInteger(n) || n < 1 || n > MAX_DOWNLOADS_LIMIT) throw new HttpError(400, "下载上限要是 1 到 1000000 的整数，不限就留空");
+      maxDownloads = n;
+    }
+  }
   let status = p.status;
   let publishedAt = p.published_at;
   if (body.status !== undefined) {
@@ -113,8 +137,9 @@ export async function updateProject(req: Request, env: Env, id: string) {
     status = body.status;
   }
   try {
-    await env.DB.prepare("UPDATE projects SET title = ?, slug = ?, description = ?, status = ?, published_at = ?, updated_at = ? WHERE id = ?")
-      .bind(title, slug, description, status, publishedAt, now(), id).run();
+    await env.DB.prepare(
+      "UPDATE projects SET title = ?, slug = ?, description = ?, status = ?, published_at = ?, code_required = ?, max_downloads = ?, updated_at = ? WHERE id = ?",
+    ).bind(title, slug, description, status, publishedAt, codeRequired, maxDownloads, now(), id).run();
   } catch (e) {
     if (isUniqueError(e)) throw new HttpError(409, "这个短地址已经被别的项目用了");
     throw e;
@@ -138,6 +163,7 @@ export async function deleteProject(env: Env, id: string, ctx: ExecutionContext)
   // 外键级联在 D1 默认开启：images / codes / downloads 一起删
   await env.DB.batch([
     env.DB.prepare("DELETE FROM downloads WHERE image_id IN (SELECT id FROM images WHERE project_id = ?)").bind(id),
+    env.DB.prepare("DELETE FROM free_downloads WHERE project_id = ?").bind(id),
     env.DB.prepare("DELETE FROM access_codes WHERE project_id = ?").bind(id),
     env.DB.prepare("DELETE FROM code_batches WHERE project_id = ?").bind(id),
     env.DB.prepare("DELETE FROM images WHERE project_id = ?").bind(id),
@@ -219,6 +245,7 @@ export async function deleteImage(env: Env, id: string) {
   const img = await getImage(env, id);
   await env.DB.batch([
     env.DB.prepare("DELETE FROM downloads WHERE image_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM free_downloads WHERE image_id = ?").bind(id),
     env.DB.prepare("DELETE FROM images WHERE id = ?").bind(id),
     env.DB.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").bind(now(), img.project_id),
   ]);
@@ -270,14 +297,18 @@ export async function listCodes(env: Env, projectId: string) {
 
 export async function createCodes(req: Request, env: Env, projectId: string) {
   await getProject(env, projectId);
-  const body = await readJson<{ count?: number; expiresAt?: number | null; expiresInDays?: number; note?: string }>(req);
+  const body = await readJson<{ count?: number; expiresAt?: number | null; expiresInDays?: number; expiresInHours?: number; note?: string }>(req);
   const count = Math.floor(Number(body.count ?? 10));
   if (!(count >= 1 && count <= 500)) throw new HttpError(400, "一次生成 1 到 500 个");
   const t = now();
   let expiresAt: number | null;
   if (body.expiresAt === null) expiresAt = null;
   else if (typeof body.expiresAt === "number") expiresAt = body.expiresAt;
-  else expiresAt = t + (Number(body.expiresInDays ?? 7) || 7) * DAY;
+  else if (body.expiresInHours !== undefined) {
+    const h = Number(body.expiresInHours);
+    if (!(h > 0 && h <= 24 * 365)) throw new HttpError(400, "有效小时数不对");
+    expiresAt = t + h * HOUR;
+  } else expiresAt = t + (Number(body.expiresInDays ?? 7) || 7) * DAY;
   if (expiresAt !== null && expiresAt <= t) throw new HttpError(400, "过期时间要晚于现在");
   const note = body.note ? String(body.note).trim().slice(0, 200) || null : null;
 

@@ -6,6 +6,8 @@ import * as admin from "./admin.ts";
 import * as pub from "./public.ts";
 import { INLINE_ASSETS } from "./assets.generated.ts";
 import { STATUS_TEXT } from "./shared/types.ts";
+import { cleanup } from "./cleanup.ts";
+import { isAuthDisabled } from "./env.ts";
 
 function decode(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -83,6 +85,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     if ((r = path.match(/^\/api\/p\/([a-z0-9-]+)\/unlock$/)) && m === "POST") return pub.unlock(req, env, r[1]!);
     if ((r = path.match(/^\/api\/p\/([a-z0-9-]+)\/downloads$/)) && m === "POST") return pub.reserve(req, env, r[1]!);
 
+    // 本地开发手动触发清理（只在 AUTH_DISABLED 的本机生效）
+    if (path === "/api/dev/cleanup" && m === "POST" && isAuthDisabled(env, req)) {
+      const at = Number(url.searchParams.get("at")) || Date.now();
+      return json(await cleanup(env, at));
+    }
+
     // 后台接口
     if (path.startsWith("/api/admin/")) {
       const user = await getUser(req, env);
@@ -137,5 +145,8 @@ export default {
     const headers = new Headers(res.headers);
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) if (!headers.has(k)) headers.set(k, v);
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+  },
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(cleanup(env));
   },
 } satisfies ExportedHandler<Env>;

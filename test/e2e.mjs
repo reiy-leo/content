@@ -82,6 +82,44 @@ ok(u3.body.status === "revoked", "unlock 显示已作废");
 const l2 = await j(`/api/admin/projects/${pid}/codes`);
 ok(l2.body.find((c) => c.code === c1).downloaded === 1, "后台看到码 1 已下 1 张");
 
+// 1 小时码
+const g1h = await j(`/api/admin/projects/${pid}/codes`, { method: "POST", json: { count: 1, expiresInHours: 1 } });
+const d1h = g1h.body.expiresAt - Date.now();
+ok(g1h.status === 201 && d1h > 59 * 60e3 && d1h <= 60 * 60e3, "1 小时码过期时间对");
+
+// 免码：默认要码；不带码下载 403
+ok((await j(`/api/p/${slug}`)).body.codeRequired === true, "默认要获取码");
+ok((await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } })).status === 403, "要码时不带码下载 403");
+ok((await j(`/api/admin/projects/${pid}`, { method: "PATCH", json: { codeRequired: false, maxDownloads: 0 } })).status === 400, "上限 0 拒绝 400");
+const off = await j(`/api/admin/projects/${pid}`, { method: "PATCH", json: { codeRequired: false, maxDownloads: 3 } });
+ok(off.status === 200 && off.body.codeRequired === false && off.body.maxDownloads === 3, "关闭获取码，上限 3");
+const pf = await j(`/api/p/${slug}`);
+ok(pf.body.codeRequired === false && pf.body.freeLeft === 3, "公开页显示免码、剩 3 次");
+const f1 = await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } });
+ok(f1.status === 200, "免码下载占位 200");
+const fr = await fetch(B + f1.body.url);
+ok(fr.status === 200, "免码票据拿到原图");
+ok((await fetch(B + f1.body.url)).status === 410, "免码票据只能用一次 410");
+const f2 = await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } });
+ok(f2.status === 200, "免码同一张图可以再下");
+// 并发抢最后 1 次以内的名额：已用 2（1 done + 1 pending），并发 5 次只能成 1 次
+const race = await Promise.all(Array.from({ length: 5 }, () => j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[1] } })));
+const raceOk = race.filter((r) => r.status === 200).length;
+ok(raceOk === 1 && race.filter((r) => r.status === 410).length === 4, `并发抢名额只成 1 次，其余 410 用完（${raceOk}）`);
+ok((await j(`/api/p/${slug}`)).body.freeLeft === 0, "剩 0 次");
+// 重新开获取码：没打开的免码票据立即失效
+ok((await j(`/api/admin/projects/${pid}`, { method: "PATCH", json: { codeRequired: true } })).status === 200, "重新开启获取码");
+ok((await fetch(B + f2.body.url)).status === 410, "开了获取码后免码票据失效 410");
+ok((await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } })).status === 403, "开了获取码后免码下载 403");
+const sum = (await j(`/api/admin/projects`)).body.find((x) => x.id === pid);
+ok(sum.freeDownloads === 1 && sum.usedCodes === 1, `列表统计：免码已下 1 次、用了 1 个码（c2 只占位没打开）（${sum.freeDownloads}/${sum.usedCodes}）`);
+
+// 清理：两小时后，1 小时码（没下过）被删，下过图的码保留
+const cl = await j(`/api/dev/cleanup?at=${Date.now() + 2 * 3600e3}`, { method: "POST" });
+ok(cl.status === 200 && cl.body.codes >= 1, `清理删掉过期没用的码（${cl.body?.codes}）`);
+const after = (await j(`/api/admin/projects/${pid}/codes`)).body;
+ok(!after.some((c) => c.code === g1h.body.codes[0]) && after.some((c) => c.code === c1), "过期没用的码删了，用过的码还在");
+
 // 跨站请求
 ok((await j(`/api/admin/projects`, { method: "POST", json: { title: "x" }, headers: { Origin: "https://evil.example" } })).status === 403, "跨站写请求 403");
 const csv = await fetch(`${B}/api/admin/projects/${pid}/codes.csv`);

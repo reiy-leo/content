@@ -11,6 +11,14 @@ export interface ProjectSummary {
   status: "draft" | "published";
   imageCount: number;
   codeCount: number;
+  /** true = 要获取码才能下载；false = 免码 */
+  codeRequired: boolean;
+  /** 免码时最多下载多少次，null = 不限 */
+  maxDownloads: number | null;
+  /** 免码下载已完成的次数 */
+  freeDownloads: number;
+  /** 至少下过一张图的获取码个数 */
+  usedCodes: number;
   createdAt: number;
   updatedAt: number;
   publishedAt: number | null;
@@ -46,7 +54,16 @@ export interface CodeDownload { imageId: string; filename: string; status: "pend
 
 export interface PublicImage { id: string; width: number; height: number }
 
-export interface PublicProject { slug: string; title: string; description: string | null; images: PublicImage[] }
+export interface PublicProject {
+  slug: string;
+  title: string;
+  description: string | null;
+  images: PublicImage[];
+  /** false = 免码，直接下载 */
+  codeRequired: boolean;
+  /** 免码且设了上限时，还剩几次；否则 null */
+  freeLeft: number | null;
+}
 
 export interface UnlockResult {
   status: CodeStatus;
@@ -72,6 +89,13 @@ export const STATUS_TEXT: Record<number, string> = {
   500: "服务器出错",
   503: "服务暂不可用",
 };
+
+/** 免码下载：每个 IP 每分钟次数（wrangler.jsonc 的 FREE_LIMITER 要一致） */
+export const FREE_RATE_PER_MIN = 50;
+
+/** 填码后弹出的使用须知里的联系方式 */
+export const CONTACT_EMAIL = "hi@rei8t.dev";
+export const CONTACT_WECHAT = "antitsunny";
 
 /** 获取码：8 位，去掉 0/O、1/I/L 等易混字符（Crockford 风格，32 个字符）。 */
 export const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";

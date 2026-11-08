@@ -26,12 +26,12 @@ MVP 已上线（2026-11-05）。付费版没做，只留了字段。
 ## 目录
 
 ```
-src/          Worker：index.ts 路由，auth.ts 登录，admin.ts 后台接口，public.ts 公开接口和下载
+src/          Worker：index.ts 路由和定时任务，auth.ts 登录，admin.ts 后台接口，public.ts 公开接口和下载，cleanup.ts 每天北京时间 3:00 的清理
 src/shared/   前后端共用类型、获取码规则
 web/          前端（Vite + React + Kumo），lib/preview.ts 在浏览器里生成马赛克图和缩略图
 migrations/   D1 迁移
 scripts/      build-inline-assets.mjs（前端内联进 Worker）、kumo-lint.mjs
-test/e2e.mjs  本地端到端检查（占位、并发下载、作废等）
+test/e2e.mjs  本地端到端检查（占位、并发下载、作废、免码与上限、清理等）。本地限流也生效，连跑两次要隔一分钟
 docs/         产品说明
 .agents/      给 agent 用的 skills（kumo-design）、rules、prompts、memory
 ```

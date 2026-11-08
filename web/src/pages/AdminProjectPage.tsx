@@ -1,4 +1,4 @@
-// 项目详情：顶部是名字、状态、公开地址和发布按钮；下面三个标签页：图片 / 获取码 / 设置。
+// 项目详情：顶部是名字、状态、公开地址和发布按钮，再下面是获取码开关；然后三个标签页：图片 / 获取码 / 设置。
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Banner, Button, InlineCopyText, Loader, Tabs, Text, useKumoToastManager } from "@cloudflare/kumo";
 import { AlertCircle, ArrowLeft, ExternalLink, Eye, EyeOff } from "lucide-react";
@@ -9,6 +9,7 @@ import { ImagesTab } from "../components/ImagesTab.tsx";
 import { CodesTab } from "../components/CodesTab.tsx";
 import { SettingsTab } from "../components/SettingsTab.tsx";
 import { NotFound } from "../components/NotFound.tsx";
+import { AccessCard } from "../components/AccessCard.tsx";
 
 export interface Detail { project: ProjectSummary; images: AdminImage[] }
 
@@ -92,6 +93,7 @@ export function AdminProjectPage({ id }: { id: string }) {
           </div>
         </div>
       </div>
+      <AccessCard project={p} publicUrl={publicUrl} onSaved={load} />
       <Tabs
         value={tab}
         onValueChange={changeTab}

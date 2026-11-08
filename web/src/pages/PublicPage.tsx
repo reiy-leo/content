@@ -1,9 +1,12 @@
 // 公开页：所有图只显示马赛克图。填获取码后每张图出现「下载原图」；下过的图换成清晰缩略图，不能再下。
-// 获取码只存在这个标签页（sessionStorage），不进 cookie，也不进 URL。
+// 项目关了获取码（免码）时，不用填码，每张图直接能下。
+// 获取码只存在这个标签页（sessionStorage），不进 cookie，也不进 URL。填码成功后弹出使用须知。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Banner, Button, Input, Loader, Text, useKumoToastManager } from "@cloudflare/kumo";
+import { Banner, Button, ClipboardText, Dialog, Input, Loader, Text, useKumoToastManager } from "@cloudflare/kumo";
 import { AlertCircle, Check, Download, DownloadCloud, KeyRound, LogOut } from "lucide-react";
-import { formatCode, normalizeCode, type PublicImage, type PublicProject, type UnlockResult } from "../../../src/shared/types.ts";
+import {
+  CONTACT_EMAIL, CONTACT_WECHAT, formatCode, normalizeCode, type PublicImage, type PublicProject, type UnlockResult,
+} from "../../../src/shared/types.ts";
 import { ApiFail, api, errMsg } from "../api.ts";
 import { fmtDay } from "../lib/format.ts";
 import { NotFound } from "../components/NotFound.tsx";
@@ -36,6 +39,38 @@ function useThumb(slug: string, code: string | null, imageId: string, enabled: b
     };
   }, [slug, code, imageId, enabled]);
   return url;
+}
+
+/** 填码成功后的使用须知 */
+function TermsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog size="base" className="px-6 py-5">
+        <div className="grid gap-4">
+          <Dialog.Title className="text-base font-semibold">使用须知</Dialog.Title>
+          <ul className="grid list-disc gap-1.5 pl-5 text-kumo-default">
+            <li>原图只限你自己使用，不能转卖或再次销售。</li>
+            <li>不是独占授权，别人也可能拿到同样的图。</li>
+            <li>不包含商业授权。</li>
+          </ul>
+          <div className="grid gap-2">
+            <Dialog.Description className="text-kumo-subtle">要商业授权，或定制动作、定制配对头像，请联系：</Dialog.Description>
+            <div className="flex flex-wrap items-center gap-2">
+              <Text variant="secondary" size="sm">邮件</Text>
+              <ClipboardText text={CONTACT_EMAIL} tooltip={{ text: "复制", copiedText: "已复制" }} labels={{ copyAction: "复制邮箱" }} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Text variant="secondary" size="sm">微信</Text>
+              <ClipboardText text={CONTACT_WECHAT} tooltip={{ text: "复制", copiedText: "已复制" }} labels={{ copyAction: "复制微信号" }} />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Dialog.Close render={(p) => <Button {...p} variant="primary">我知道了</Button>} />
+          </div>
+        </div>
+      </Dialog>
+    </Dialog.Root>
+  );
 }
 
 function ImageTile({
@@ -79,9 +114,10 @@ export function PublicPage({ slug }: { slug: string }) {
   const [checking, setChecking] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState(false);
+  const [terms, setTerms] = useState(false);
   const bulkStop = useRef(false);
 
-  useEffect(() => {
+  const loadProject = useCallback(() => {
     api<PublicProject>(`/api/p/${slug}`).then(
       (p) => {
         setProject(p);
@@ -90,6 +126,7 @@ export function PublicPage({ slug }: { slug: string }) {
       (e) => setLoadError({ status: e instanceof ApiFail ? e.status : 0, msg: errMsg(e) }),
     );
   }, [slug]);
+  useEffect(loadProject, [loadProject]);
 
   const tryCode = useCallback(
     async (raw: string, silent = false) => {
@@ -105,6 +142,7 @@ export function PublicPage({ slug }: { slug: string }) {
         setCode(norm);
         setUnlock(r);
         sessionStorage.setItem(storeKey(slug), norm);
+        if (!silent && r.status === "active") setTerms(true);
       } catch (e) {
         sessionStorage.removeItem(storeKey(slug));
         if (!silent) setCodeError(errMsg(e));
@@ -132,38 +170,66 @@ export function PublicPage({ slug }: { slug: string }) {
     setInput("");
   };
 
+  const startDownload = (url: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.rel = "noopener";
+    document.body.append(a);
+    a.click();
+    a.remove();
+  };
+
+  const setBusy = (imageId: string, on: boolean) =>
+    setBusyIds((s) => {
+      const n = new Set(s);
+      if (on) n.add(imageId);
+      else n.delete(imageId);
+      return n;
+    });
+
+  /** 免码下载：不带码，可以重复下 */
+  const downloadFree = async (imageId: string): Promise<boolean> => {
+    setBusy(imageId, true);
+    try {
+      const r = await api<{ url: string }>(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId } });
+      startDownload(r.url);
+      setProject((p) => (p && p.freeLeft !== null ? { ...p, freeLeft: Math.max(0, p.freeLeft - 1) } : p));
+      return true;
+    } catch (e) {
+      // 403：刚开了获取码；410：次数用完。都重新拉一次项目
+      if (e instanceof ApiFail && (e.status === 403 || e.status === 410)) loadProject();
+      toast.add({ title: "没能下载", description: errMsg(e), variant: "error" });
+      return false;
+    } finally {
+      setBusy(imageId, false);
+    }
+  };
+
   const downloadOne = async (imageId: string): Promise<boolean> => {
+    if (!project?.codeRequired) return downloadFree(imageId);
     if (!code) return false;
-    setBusyIds((s) => new Set(s).add(imageId));
+    setBusy(imageId, true);
     try {
       const r = await api<{ url: string }>(`/api/p/${slug}/downloads`, { method: "POST", json: { code, imageId } });
-      const a = document.createElement("a");
-      a.href = r.url;
-      a.rel = "noopener";
-      document.body.append(a);
-      a.click();
-      a.remove();
+      startDownload(r.url);
       setUnlock((u) => (u ? { ...u, downloaded: [...new Set([...u.downloaded, imageId])] } : u));
       return true;
     } catch (e) {
       if (e instanceof ApiFail && e.status === 409) setUnlock((u) => (u ? { ...u, downloaded: [...new Set([...u.downloaded, imageId])] } : u));
       if (e instanceof ApiFail && e.status === 410) void tryCode(code, true);
+      if (e instanceof ApiFail && e.status === 403) loadProject();
       toast.add({ title: "没能下载", description: errMsg(e), variant: "error" });
       return false;
     } finally {
-      setBusyIds((s) => {
-        const n = new Set(s);
-        n.delete(imageId);
-        return n;
-      });
+      setBusy(imageId, false);
     }
   };
 
   const downloadRest = async () => {
-    if (!project || !unlock) return;
+    if (!project || (project.codeRequired && !unlock)) return;
     bulkStop.current = false;
     setBulk(true);
-    const rest = project.images.filter((i) => !unlock.downloaded.includes(i.id));
+    const rest = project.codeRequired ? project.images.filter((i) => !unlock!.downloaded.includes(i.id)) : project.images;
     for (const img of rest) {
       if (bulkStop.current) break;
       const ok = await downloadOne(img.id);
@@ -182,6 +248,8 @@ export function PublicPage({ slug }: { slug: string }) {
     );
   }
 
+  const free = !project.codeRequired;
+  const freeOut = free && project.freeLeft === 0;
   const active = unlock?.status === "active";
   const total = project.images.length;
   const left = unlock ? project.images.filter((i) => !unlock.downloaded.includes(i.id)).length : total;
@@ -191,11 +259,25 @@ export function PublicPage({ slug }: { slug: string }) {
       <div className="grid gap-2">
         <Text variant="heading" as="h1" size="lg">{project.title}</Text>
         {project.description && <Text variant="secondary" DANGEROUS_className="whitespace-pre-line">{project.description}</Text>}
-        <Text variant="secondary" size="sm">共 {total} 张，预览图都打了马赛克。有获取码才能下载原图，每个码每张图只能下一次。</Text>
+        <Text variant="secondary" size="sm">
+          {free ? `共 ${total} 张，预览图都打了马赛克，原图可以直接下载。` : `共 ${total} 张，预览图都打了马赛克。有获取码才能下载原图，每个码每张图只能下一次。`}
+        </Text>
       </div>
 
       <div className="grid gap-3 rounded-xl bg-kumo-base p-4 ring ring-kumo-line">
-        {!unlock ? (
+        {free ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="grid gap-1">
+              <Text bold>不用获取码，直接下载</Text>
+              <Text variant={freeOut ? "error" : "secondary"} size="sm">
+                {freeOut ? "这个项目的下载次数已经用完了。" : project.freeLeft !== null ? `整个项目还能下载 ${project.freeLeft} 次。` : "点每张图下面的「下载原图」。"}
+              </Text>
+            </div>
+            {!freeOut && total > 1 && (
+              <Button variant="primary" icon={<DownloadCloud size={16} />} loading={bulk} onClick={downloadRest}>全部下载</Button>
+            )}
+          </div>
+        ) : !unlock ? (
           <form
             className="flex flex-wrap items-start gap-2"
             onSubmit={(e) => {
@@ -249,14 +331,15 @@ export function PublicPage({ slug }: { slug: string }) {
             img={img}
             index={i}
             code={code}
-            unlocked={!!unlock}
-            downloaded={!!unlock?.downloaded.includes(img.id)}
-            canDownload={active && !bulk}
+            unlocked={free || !!unlock}
+            downloaded={!free && !!unlock?.downloaded.includes(img.id)}
+            canDownload={(free ? !freeOut : active) && !bulk}
             busy={busyIds.has(img.id)}
             onDownload={() => void downloadOne(img.id)}
           />
         ))}
       </div>
+      <TermsDialog open={terms} onOpenChange={setTerms} />
     </main>
   );
 }

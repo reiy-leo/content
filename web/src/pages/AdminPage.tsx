@@ -1,7 +1,7 @@
 // 后台：没登录显示登录卡片；登录后 /admin 是项目列表，/admin/projects/:id 是项目详情。
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Banner, Button, Dialog, Empty, Input, InputArea, Loader, Text, useKumoToastManager } from "@cloudflare/kumo";
-import { AlertCircle, FolderPlus, Images, KeyRound, Lock, Plus, X } from "lucide-react";
+import { AlertCircle, Download, FolderPlus, Images, KeyRound, Lock, Plus, X } from "lucide-react";
 import type { LoginError, ProjectSummary } from "../../../src/shared/types.ts";
 import { api, errMsg } from "../api.ts";
 import { useMe } from "../lib/me.ts";
@@ -157,7 +157,13 @@ function ProjectList() {
               <Text variant="mono-secondary">/p/{p.slug}</Text>
               <div className="flex items-center gap-4 text-kumo-subtle">
                 <span className="flex items-center gap-1 text-sm"><Images size={14} /> {p.imageCount} 张</span>
-                <span className="flex items-center gap-1 text-sm"><KeyRound size={14} /> {p.codeCount} 个码</span>
+                {p.codeRequired ? (
+                  <span className="flex items-center gap-1 text-sm"><KeyRound size={14} /> 用了 {p.usedCodes} 个码</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-sm">
+                    <Download size={14} /> 免码，已下载 {p.freeDownloads}{p.maxDownloads ? ` / ${p.maxDownloads}` : ""} 次
+                  </span>
+                )}
               </div>
               <Text variant="secondary" size="sm">更新于 {fmtTime(p.updatedAt)}</Text>
             </a>

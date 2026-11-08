@@ -6,7 +6,9 @@ import type { AdminCode, CodeDownload, CodeStatus, ProjectSummary } from "../../
 import { api, errMsg } from "../api.ts";
 import { copyText, fmtTime } from "../lib/format.ts";
 
-const EXPIRY: Record<string, string> = { "1": "1 天", "3": "3 天", "7": "7 天", "30": "30 天", "90": "90 天", never: "不过期", custom: "选日期" };
+const EXPIRY: Record<string, string> = {
+  "1h": "1 小时", "1d": "1 天", "3d": "3 天", "7d": "7 天", "30d": "30 天", "90d": "90 天", never: "不过期", custom: "选日期",
+};
 const STATUS: Record<CodeStatus, { label: string; variant: "success" | "neutral" | "error" }> = {
   active: { label: "可用", variant: "success" },
   expired: { label: "已过期", variant: "neutral" },
@@ -16,7 +18,7 @@ const FILTERS: Record<string, string> = { all: "全部", active: "可用", expir
 
 function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: string; open: boolean; onOpenChange: (v: boolean) => void; onDone: (codes: string[]) => void }) {
   const [count, setCount] = useState("10");
-  const [expiry, setExpiry] = useState("7");
+  const [expiry, setExpiry] = useState("7d");
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,11 +27,12 @@ function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: 
     setError(null);
     const body: Record<string, unknown> = { count: Number(count), note };
     if (expiry === "never") body.expiresAt = null;
+    else if (expiry === "1h") body.expiresInHours = 1;
     else if (expiry === "custom") {
       if (!date) return setError("先选过期日期");
       // 选的那天结束时过期（浏览器本地时区）
       body.expiresAt = new Date(`${date}T23:59:59`).getTime();
-    } else body.expiresInDays = Number(expiry);
+    } else body.expiresInDays = parseInt(expiry, 10);
     setBusy(true);
     try {
       const r = await api<{ codes: string[] }>(`/api/admin/projects/${projectId}/codes`, { method: "POST", json: body });
