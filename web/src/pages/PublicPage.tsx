@@ -10,6 +10,7 @@ import {
 import { ApiFail, api, errMsg } from "../api.ts";
 import { fmtDay } from "../lib/format.ts";
 import { NotFound } from "../components/NotFound.tsx";
+import { getT, useI18n } from "../i18n/index.ts";
 
 const storeKey = (slug: string) => `ct-code:${slug}`;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -43,29 +44,30 @@ function useThumb(slug: string, code: string | null, imageId: string, enabled: b
 
 /** 填码成功后的使用须知 */
 function TermsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useI18n();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog size="base" className="px-6 py-5">
         <div className="grid gap-4">
-          <Dialog.Title className="text-base font-semibold">使用须知</Dialog.Title>
+          <Dialog.Title className="text-base font-semibold">{t.termsTitle}</Dialog.Title>
           <ul className="grid list-disc gap-1.5 pl-5 text-kumo-default">
-            <li>原图只限你自己使用，不能转卖或再次销售。</li>
-            <li>不是独占授权，别人也可能拿到同样的图。</li>
-            <li>不包含商业授权。</li>
+            <li>{t.terms1}</li>
+            <li>{t.terms2}</li>
+            <li>{t.terms3}</li>
           </ul>
           <div className="grid gap-2">
-            <Dialog.Description className="text-kumo-subtle">要商业授权，或定制动作、定制配对头像，请联系：</Dialog.Description>
+            <Dialog.Description className="text-kumo-subtle">{t.termsContact}</Dialog.Description>
             <div className="flex flex-wrap items-center gap-2">
-              <Text variant="secondary" size="sm">邮件</Text>
-              <ClipboardText text={CONTACT_EMAIL} tooltip={{ text: "复制", copiedText: "已复制" }} labels={{ copyAction: "复制邮箱" }} />
+              <Text variant="secondary" size="sm">{t.email}</Text>
+              <ClipboardText text={CONTACT_EMAIL} tooltip={{ text: t.copy, copiedText: t.copied }} labels={{ copyAction: t.copyEmail }} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Text variant="secondary" size="sm">微信</Text>
-              <ClipboardText text={CONTACT_WECHAT} tooltip={{ text: "复制", copiedText: "已复制" }} labels={{ copyAction: "复制微信号" }} />
+              <Text variant="secondary" size="sm">{t.wechat}</Text>
+              <ClipboardText text={CONTACT_WECHAT} tooltip={{ text: t.copy, copiedText: t.copied }} labels={{ copyAction: t.copyWechat }} />
             </div>
           </div>
           <div className="flex justify-end">
-            <Dialog.Close render={(p) => <Button {...p} variant="primary">我知道了</Button>} />
+            <Dialog.Close render={(p) => <Button {...p} variant="primary">{t.gotIt}</Button>} />
           </div>
         </div>
       </Dialog>
@@ -78,24 +80,25 @@ function ImageTile({
 }: {
   slug: string; img: PublicImage; index: number; code: string | null; unlocked: boolean; downloaded: boolean; canDownload: boolean; busy: boolean; onDownload: () => void;
 }) {
+  const { t } = useI18n();
   const thumb = useThumb(slug, code, img.id, downloaded);
   return (
     <div className="grid overflow-hidden rounded-xl bg-kumo-base ring ring-kumo-line">
       <div className="relative bg-kumo-recessed" style={{ aspectRatio: `${img.width} / ${img.height}` }}>
         {downloaded && thumb ? (
-          <img src={thumb} alt={`第 ${index + 1} 张（缩略图）`} className="size-full object-cover" />
+          <img src={thumb} alt={t.imageAltThumb(index + 1)} className="size-full object-cover" />
         ) : (
-          <img src={`/api/p/${slug}/mosaic/${img.id}`} alt={`第 ${index + 1} 张（马赛克预览）`} loading="lazy" className="ct-pixel size-full object-cover" />
+          <img src={`/api/p/${slug}/mosaic/${img.id}`} alt={t.imageAltMosaic(index + 1)} loading="lazy" className="ct-pixel size-full object-cover" />
         )}
       </div>
       <div className="flex items-center justify-between gap-2 p-3">
-        <Text variant="secondary" size="sm">第 {index + 1} 张 · {img.width}×{img.height}</Text>
+        <Text variant="secondary" size="sm">{t.imageMeta(index + 1, img.width, img.height)}</Text>
         {unlocked &&
           (downloaded ? (
-            <Button size="sm" variant="secondary" icon={<Check size={14} />} disabled>已下载</Button>
+            <Button size="sm" variant="secondary" icon={<Check size={14} />} disabled>{t.downloaded}</Button>
           ) : (
             <Button size="sm" variant="primary" icon={<Download size={14} />} loading={busy} disabled={!canDownload} onClick={onDownload}>
-              下载原图
+              {t.downloadOriginal}
             </Button>
           ))}
       </div>
@@ -105,6 +108,7 @@ function ImageTile({
 
 export function PublicPage({ slug }: { slug: string }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const [project, setProject] = useState<PublicProject | null>(null);
   const [loadError, setLoadError] = useState<{ status: number; msg: string } | null>(null);
   const [input, setInput] = useState("");
@@ -119,20 +123,21 @@ export function PublicPage({ slug }: { slug: string }) {
 
   const loadProject = useCallback(() => {
     api<PublicProject>(`/api/p/${slug}`).then(
-      (p) => {
-        setProject(p);
-        document.title = `${p.title} · 原图获取`;
-      },
+      (p) => setProject(p),
       (e) => setLoadError({ status: e instanceof ApiFail ? e.status : 0, msg: errMsg(e) }),
     );
   }, [slug]);
   useEffect(loadProject, [loadProject]);
+  // 标题跟着语言变
+  useEffect(() => {
+    if (project) document.title = `${project.title} · ${t.appName}`;
+  }, [project?.title, t]);
 
   const tryCode = useCallback(
     async (raw: string, silent = false) => {
       const norm = normalizeCode(raw);
       if (!norm) {
-        if (!silent) setCodeError("获取码是 8 位字母和数字，比如 ABCD-EFGH");
+        if (!silent) setCodeError(getT().codeFormat);
         return;
       }
       setChecking(true);
@@ -198,7 +203,7 @@ export function PublicPage({ slug }: { slug: string }) {
     } catch (e) {
       // 403：刚开了获取码；410：次数用完。都重新拉一次项目
       if (e instanceof ApiFail && (e.status === 403 || e.status === 410)) loadProject();
-      toast.add({ title: "没能下载", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.downloadFailed, description: errMsg(e), variant: "error" });
       return false;
     } finally {
       setBusy(imageId, false);
@@ -218,7 +223,7 @@ export function PublicPage({ slug }: { slug: string }) {
       if (e instanceof ApiFail && e.status === 409) setUnlock((u) => (u ? { ...u, downloaded: [...new Set([...u.downloaded, imageId])] } : u));
       if (e instanceof ApiFail && e.status === 410) void tryCode(code, true);
       if (e instanceof ApiFail && e.status === 403) loadProject();
-      toast.add({ title: "没能下载", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.downloadFailed, description: errMsg(e), variant: "error" });
       return false;
     } finally {
       setBusy(imageId, false);
@@ -239,11 +244,11 @@ export function PublicPage({ slug }: { slug: string }) {
     setBulk(false);
   };
 
-  if (loadError?.status === 404) return <NotFound title="404 找不到这个项目" description="链接可能写错了，或者项目还没发布、已经取消发布。" />;
+  if (loadError?.status === 404) return <NotFound title={t.projectNotFoundTitle} description={t.projectNotFoundDesc} />;
   if (!project) {
     return (
       <main className="mx-auto max-w-6xl px-5 py-10">
-        {loadError ? <Banner variant="error" icon={<AlertCircle size={16} />} title="加载失败" description={loadError.msg} /> : <Loader />}
+        {loadError ? <Banner variant="error" icon={<AlertCircle size={16} />} title={t.loadFailed} description={loadError.msg} /> : <Loader />}
       </main>
     );
   }
@@ -260,7 +265,7 @@ export function PublicPage({ slug }: { slug: string }) {
         <Text variant="heading" as="h1" size="lg">{project.title}</Text>
         {project.description && <Text variant="secondary" DANGEROUS_className="whitespace-pre-line">{project.description}</Text>}
         <Text variant="secondary" size="sm">
-          {free ? `共 ${total} 张，预览图都打了马赛克，原图可以直接下载。` : `共 ${total} 张，预览图都打了马赛克。有获取码才能下载原图，每个码每张图只能下一次。`}
+          {free ? t.summaryFree(total) : t.summaryCode(total)}
         </Text>
       </div>
 
@@ -268,13 +273,13 @@ export function PublicPage({ slug }: { slug: string }) {
         {free ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="grid gap-1">
-              <Text bold>不用获取码，直接下载</Text>
+              <Text bold>{t.freeTitle}</Text>
               <Text variant={freeOut ? "error" : "secondary"} size="sm">
-                {freeOut ? "这个项目的下载次数已经用完了。" : project.freeLeft !== null ? `整个项目还能下载 ${project.freeLeft} 次。` : "点每张图下面的「下载原图」。"}
+                {freeOut ? t.freeOut : project.freeLeft !== null ? t.freeLeft(project.freeLeft) : t.freeHint}
               </Text>
             </div>
             {!freeOut && total > 1 && (
-              <Button variant="primary" icon={<DownloadCloud size={16} />} loading={bulk} onClick={downloadRest}>全部下载</Button>
+              <Button variant="primary" icon={<DownloadCloud size={16} />} loading={bulk} onClick={downloadRest}>{t.downloadAll}</Button>
             )}
           </div>
         ) : !unlock ? (
@@ -287,8 +292,8 @@ export function PublicPage({ slug }: { slug: string }) {
           >
             <div className="min-w-56 flex-1">
               <Input
-                aria-label="获取码"
-                placeholder="填获取码，比如 ABCD-EFGH"
+                aria-label={t.accessCode}
+                placeholder={t.codePlaceholder}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 autoComplete="off"
@@ -297,27 +302,27 @@ export function PublicPage({ slug }: { slug: string }) {
                 error={codeError ?? undefined}
               />
             </div>
-            <Button type="submit" variant="primary" icon={<KeyRound size={16} />} loading={checking}>用这个码</Button>
+            <Button type="submit" variant="primary" icon={<KeyRound size={16} />} loading={checking}>{t.useCode}</Button>
           </form>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="grid gap-1">
-              <Text bold>获取码 {code ? formatCode(code) : ""}</Text>
+              <Text bold>{t.codeLabel(code ? formatCode(code) : "")}</Text>
               {active ? (
                 <Text variant="secondary" size="sm">
-                  还能下 {left} 张{unlock.expiresAt ? `，${fmtDay(unlock.expiresAt)}过期` : "，不过期"}
+                  {t.leftActive(left, unlock.expiresAt ? fmtDay(unlock.expiresAt) : null)}
                 </Text>
               ) : (
                 <Text variant="error" size="sm">
-                  {unlock.status === "revoked" ? "这个码已作废，不能再下载。" : `这个码已在 ${unlock.expiresAt ? fmtDay(unlock.expiresAt) : ""}过期，不能再下载。`}
+                  {unlock.status === "revoked" ? t.codeRevokedMsg : t.codeExpiredMsg(unlock.expiresAt ? fmtDay(unlock.expiresAt) : "")}
                 </Text>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
               {active && left > 0 && (
-                <Button variant="primary" icon={<DownloadCloud size={16} />} loading={bulk} onClick={downloadRest}>下载剩下的全部</Button>
+                <Button variant="primary" icon={<DownloadCloud size={16} />} loading={bulk} onClick={downloadRest}>{t.downloadRest}</Button>
               )}
-              <Button variant="ghost" icon={<LogOut size={16} />} onClick={forget}>换一个码</Button>
+              <Button variant="ghost" icon={<LogOut size={16} />} onClick={forget}>{t.changeCode}</Button>
             </div>
           </div>
         )}

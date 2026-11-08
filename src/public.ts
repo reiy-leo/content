@@ -13,7 +13,7 @@ interface CodeRow { id: string; project_id: string; expires_at: number | null; r
 async function publishedProject(env: Env, slug: string): Promise<PubProjectRow> {
   const p = await env.DB.prepare("SELECT id, slug, title, description, code_required, max_downloads FROM projects WHERE slug = ? AND status = 'published'")
     .bind(slug).first<PubProjectRow>();
-  if (!p) throw new HttpError(404, "项目不存在或还没发布");
+  if (!p) throw new HttpError(404, "project_unpublished");
   return p;
 }
 
@@ -21,7 +21,7 @@ async function limit(env: Env, req: Request, scope: string, limiter = env.UNLOCK
   if (!limiter) return;
   const ip = req.headers.get("CF-Connecting-IP") ?? "unknown";
   const { success } = await limiter.limit({ key: `${scope}:${ip}` });
-  if (!success) throw new HttpError(429, "试得太频繁了，请一分钟后再试");
+  if (!success) throw new HttpError(429, "rate_limited");
 }
 
 /** 免码下载已用掉的次数：已完成的，加上票据还没过期的占位 */
@@ -29,11 +29,11 @@ const FREE_USED = `(SELECT COUNT(*) FROM free_downloads f WHERE f.project_id = p
 
 async function findCode(env: Env, projectId: string, raw: unknown): Promise<CodeRow> {
   const code = normalizeCode(String(raw ?? ""));
-  if (!code) throw new HttpError(404, "获取码不对");
+  if (!code) throw new HttpError(404, "code_wrong");
   const row = await env.DB.prepare("SELECT id, project_id, expires_at, revoked_at FROM access_codes WHERE code = ?")
     .bind(code).first<CodeRow>();
   // 别的项目的码也当成「不对」，不透露它存在
-  if (!row || row.project_id !== projectId) throw new HttpError(404, "获取码不对");
+  if (!row || row.project_id !== projectId) throw new HttpError(404, "code_wrong");
   return row;
 }
 
@@ -64,9 +64,9 @@ export async function getPublicProject(env: Env, slug: string) {
 export async function mosaic(env: Env, slug: string, imageId: string) {
   const p = await publishedProject(env, slug);
   const img = await env.DB.prepare("SELECT mosaic_key FROM images WHERE id = ? AND project_id = ?").bind(imageId, p.id).first<{ mosaic_key: string }>();
-  if (!img) throw new HttpError(404, "图片不存在");
+  if (!img) throw new HttpError(404, "image_not_found");
   const obj = await env.BUCKET.get(img.mosaic_key);
-  if (!obj) throw new HttpError(404, "图片不存在");
+  if (!obj) throw new HttpError(404, "image_not_found");
   return new Response(obj.body, { headers: { "Content-Type": obj.httpMetadata?.contentType ?? "image/webp", "Cache-Control": "public, max-age=3600" } });
 }
 
@@ -95,9 +95,9 @@ export async function thumb(req: Request, env: Env, slug: string, imageId: strin
     `SELECT i.thumb_key FROM images i JOIN downloads d ON d.image_id = i.id
      WHERE i.id = ? AND i.project_id = ? AND d.code_id = ? AND d.status = 'done'`,
   ).bind(imageId, p.id, c.id).first<{ thumb_key: string }>();
-  if (!img) throw new HttpError(403, "下载过这张图才能看缩略图");
+  if (!img) throw new HttpError(403, "thumb_forbidden");
   const obj = await env.BUCKET.get(img.thumb_key);
-  if (!obj) throw new HttpError(404, "图片不存在");
+  if (!obj) throw new HttpError(404, "image_not_found");
   return new Response(obj.body, { headers: { "Content-Type": obj.httpMetadata?.contentType ?? "image/webp", "Cache-Control": "private, no-store" } });
 }
 
@@ -117,7 +117,7 @@ export async function reserve(req: Request, env: Env, slug: string) {
   await limit(env, req, "download");
   const c = await findCode(env, p.id, body.code);
   const st = codeStatus(c);
-  if (st !== "active") throw new HttpError(410, st === "revoked" ? "获取码已作废" : "获取码已过期");
+  if (st !== "active") throw new HttpError(410, st === "revoked" ? "code_revoked" : "code_expired");
   const imageId = String(body.imageId ?? "");
 
   const ticket = nanoid(43);
@@ -141,8 +141,8 @@ export async function reserve(req: Request, env: Env, slug: string) {
     return json({ ticket, url: `/dl/${ticket}`, expiresAt: exp });
   }
   const done = await env.DB.prepare("SELECT 1 AS x FROM downloads WHERE code_id = ? AND image_id = ? AND status = 'done'").bind(c.id, imageId).first();
-  if (done) throw new HttpError(409, "这张图已经用这个码下载过了");
-  throw new HttpError(404, "图片不存在");
+  if (done) throw new HttpError(409, "already_downloaded");
+  throw new HttpError(404, "image_not_found");
 }
 
 /**
@@ -150,7 +150,7 @@ export async function reserve(req: Request, env: Env, slug: string) {
  * 一条 INSERT 里同时检查「项目已发布、免码、图属于项目、没到下载上限」，并发时也不会超。
  */
 async function reserveFree(req: Request, env: Env, p: PubProjectRow, imageId: string) {
-  if (p.code_required) throw new HttpError(403, "这个项目要获取码才能下载");
+  if (p.code_required) throw new HttpError(403, "code_needed");
   await limit(env, req, "free", env.FREE_LIMITER);
   const ticket = nanoid(43);
   const hash = await sha256Hex(ticket);
@@ -164,15 +164,15 @@ async function reserveFree(req: Request, env: Env, p: PubProjectRow, imageId: st
   ).bind(p.id, imageId, t, nanoid(), hash, exp, await ipHash(env, req)).run();
   if ((res.meta.changes ?? 0) > 0) return json({ ticket, url: `/dl/${ticket}`, expiresAt: exp });
   const img = await env.DB.prepare("SELECT 1 AS x FROM images WHERE id = ? AND project_id = ?").bind(imageId, p.id).first();
-  if (!img) throw new HttpError(404, "图片不存在");
+  if (!img) throw new HttpError(404, "image_not_found");
   const cur = await env.DB.prepare("SELECT code_required FROM projects WHERE id = ?").bind(p.id).first<{ code_required: number }>();
-  if (cur?.code_required) throw new HttpError(403, "这个项目要获取码才能下载");
-  throw new HttpError(410, "这个项目的下载次数已经用完了");
+  if (cur?.code_required) throw new HttpError(403, "code_needed");
+  throw new HttpError(410, "free_exhausted");
 }
 
 /** GET /dl/:ticket —— 票据只能用一次：先标成 done，再流式返回原图。 */
 export async function download(env: Env, ticket: string) {
-  if (!/^[A-Za-z0-9_-]{20,64}$/.test(ticket)) throw new HttpError(410, "下载链接已失效");
+  if (!/^[A-Za-z0-9_-]{20,64}$/.test(ticket)) throw new HttpError(410, "ticket_invalid");
   const hash = await sha256Hex(ticket);
   const t = now();
   let table: "downloads" | "free_downloads" = "downloads";
@@ -191,14 +191,14 @@ export async function download(env: Env, ticket: string) {
        RETURNING id, image_id`,
     ).bind(hash, t).first<{ id: string; image_id: string }>();
   }
-  if (!row) throw new HttpError(410, "下载链接已失效，回到项目页重新点下载");
+  if (!row) throw new HttpError(410, "ticket_expired");
   const img = await env.DB.prepare("SELECT original_key, filename, mime, size_bytes FROM images WHERE id = ?")
     .bind(row.image_id).first<{ original_key: string; filename: string; mime: string; size_bytes: number }>();
   const obj = img ? await env.BUCKET.get(img.original_key) : null;
   if (!img || !obj) {
     // 文件不在：退回 pending，不算用掉
     await env.DB.prepare(`UPDATE ${table} SET status = 'pending', completed_at = NULL WHERE id = ?`).bind(row.id).run();
-    throw new HttpError(404, "原图文件不存在");
+    throw new HttpError(404, "original_missing");
   }
   return new Response(obj.body, {
     headers: {

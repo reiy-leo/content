@@ -1,9 +1,10 @@
-// JSON 响应与错误。错误体统一 { error, status }，error 是给人看的中文说明。
-import { STATUS_TEXT } from "./shared/types.ts";
+// JSON 响应与错误。错误体统一 { error, code, params, status }：error 是中文说明，code 是固定的错误键，
+// 前端按 code 翻译成当前语言（翻不了就显示 error）。错误文案在 shared/errors.ts。
+import { type ErrorCode, type ErrorParams, errorText } from "./shared/errors.ts";
 
 export class HttpError extends Error {
-  constructor(public status: number, message?: string) {
-    super(message ?? STATUS_TEXT[status] ?? "出错了");
+  constructor(public status: number, public code: ErrorCode = "generic", public params?: ErrorParams) {
+    super(errorText("zh", code, params));
   }
 }
 
@@ -14,21 +15,21 @@ export const json = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), { ...init, headers });
 };
 
-export const errorResponse = (status: number, message?: string) =>
-  json({ error: message ?? STATUS_TEXT[status] ?? "出错了", status }, { status });
+export const errorResponse = (e: HttpError) =>
+  json({ error: e.message, code: e.code, ...(e.params ? { params: e.params } : {}), status: e.status }, { status: e.status });
 
 export async function readJson<T>(req: Request): Promise<T> {
   try {
     return (await req.json()) as T;
   } catch {
-    throw new HttpError(400, "请求内容不是有效的 JSON");
+    throw new HttpError(400, "bad_json");
   }
 }
 
 /** 写操作校验 Origin，防跨站请求。没有 Origin 头（同源 GET、curl）时放行。 */
 export function checkOrigin(req: Request) {
   const origin = req.headers.get("Origin");
-  if (origin && origin !== new URL(req.url).origin) throw new HttpError(403, "来源不对，拒绝跨站请求");
+  if (origin && origin !== new URL(req.url).origin) throw new HttpError(403, "bad_origin");
 }
 
 export const now = () => Date.now();

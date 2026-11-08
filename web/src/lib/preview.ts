@@ -1,6 +1,8 @@
 // 在浏览器里生成马赛克图和缩略图（Worker 不做图片处理）。
 // 马赛克：长边缩到 24 格，再不平滑地放大到长边 960px，只看得出构图和颜色。
 // 缩略图：长边 480px，清晰，只给下过这张图的获取码看。
+import { getT } from "../i18n/index.ts";
+
 export const ACCEPT = "image/jpeg,image/png,image/webp,image/avif,image/gif";
 const MOSAIC_CELLS = 24;
 const MOSAIC_SIZE = 960;
@@ -13,13 +15,13 @@ function canvas(w: number, h: number) {
   c.width = Math.max(1, Math.round(w));
   c.height = Math.max(1, Math.round(h));
   const ctx = c.getContext("2d");
-  if (!ctx) throw new Error("浏览器不支持 canvas");
+  if (!ctx) throw new Error(getT().previewNoCanvas);
   return { c, ctx };
 }
 
 function toBlob(c: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    c.toBlob((b) => (b ? resolve(b) : reject(new Error("生成预览图失败"))), "image/webp", quality),
+    c.toBlob((b) => (b ? resolve(b) : reject(new Error(getT().previewFailed))), "image/webp", quality),
   );
 }
 
@@ -33,7 +35,7 @@ export async function makePreviews(file: File): Promise<Previews> {
   try {
     bmp = await createImageBitmap(file);
   } catch {
-    throw new Error(/heic|heif/i.test(file.type + file.name) ? "浏览器解不了 HEIC，请先转成 JPEG" : "这张图打不开，可能格式不支持或文件损坏");
+    throw new Error(/heic|heif/i.test(file.type + file.name) ? getT().previewHeic : getT().previewCannotOpen);
   }
   const { width, height } = bmp;
   try {

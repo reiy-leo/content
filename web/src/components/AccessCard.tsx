@@ -6,14 +6,12 @@ import { Download, KeyRound, Pencil } from "lucide-react";
 import { FREE_RATE_PER_MIN, type ProjectSummary } from "../../../src/shared/types.ts";
 import { api, errMsg } from "../api.ts";
 import { copyText, fmtTime } from "../lib/format.ts";
+import { getT, useI18n } from "../i18n/index.ts";
 
 /** 「获取码」按钮复制出去的文字：码、公开地址、1 小时内有效、每张图一次 */
 export function codeShareText(code: string, publicUrl: string, expiresAt: number | null) {
-  return [
-    `获取码：${code}`,
-    `打开 ${publicUrl} ，填入获取码就能下载原图。`,
-    `1 小时内有效${expiresAt ? `（${fmtTime(expiresAt)} 前）` : ""}，每张图只能下载一次。`,
-  ].join("\n");
+  const t = getT();
+  return [t.shareCode(code), t.shareOpen(publicUrl), t.shareValid(expiresAt ? fmtTime(expiresAt) : null)].join("\n");
 }
 
 const parseMax = (v: string): number | null | "bad" => {
@@ -25,6 +23,7 @@ const parseMax = (v: string): number | null | "bad" => {
 
 export function AccessCard({ project, publicUrl, onSaved }: { project: ProjectSummary; publicUrl: string; onSaved: () => Promise<void> }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const on = project.codeRequired;
   const [confirm, setConfirm] = useState(false);
   const [editMax, setEditMax] = useState(false);
@@ -62,17 +61,17 @@ export function AccessCard({ project, publicUrl, onSaved }: { project: ProjectSu
   const toggle = () => {
     if (on) {
       const m = parseMax(max);
-      if (m === "bad") return setError("上限要是 1 到 1000000 的整数，不限就留空");
-      void patch({ codeRequired: false, maxDownloads: m }, "已关闭获取码，现在不用码就能下载", () => setConfirm(false));
+      if (m === "bad") return setError(t.maxInvalid);
+      void patch({ codeRequired: false, maxDownloads: m }, t.turnedOffToast, () => setConfirm(false));
     } else {
-      void patch({ codeRequired: true }, "已开启获取码，免码下载已停止", () => setConfirm(false));
+      void patch({ codeRequired: true }, t.turnedOnToast, () => setConfirm(false));
     }
   };
 
   const saveMax = () => {
     const m = parseMax(max);
-    if (m === "bad") return setError("上限要是 1 到 1000000 的整数，不限就留空");
-    void patch({ maxDownloads: m }, "已保存下载上限", () => setEditMax(false));
+    if (m === "bad") return setError(t.maxInvalid);
+    void patch({ maxDownloads: m }, t.maxSavedToast, () => setEditMax(false));
   };
 
   const issue = async () => {
@@ -84,60 +83,58 @@ export function AccessCard({ project, publicUrl, onSaved }: { project: ProjectSu
       });
       const code = r.codes[0]!;
       await copyText(codeShareText(code, publicUrl, r.expiresAt));
-      toast.add({ title: `获取码 ${code} 已复制`, description: "连同说明一起复制好了，1 小时内有效。" });
+      toast.add({ title: t.issuedToast(code), description: t.issuedDesc });
       await onSaved();
     } catch (e) {
-      toast.add({ title: "没能生成获取码", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.issueFailed, description: errMsg(e), variant: "error" });
     } finally {
       setIssuing(false);
     }
   };
 
-  const limitText = project.maxDownloads ? `${project.freeDownloads} / ${project.maxDownloads} 次` : `${project.freeDownloads} 次，不限次数`;
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-kumo-base p-4 ring ring-kumo-line">
       <div className="grid gap-1">
-        <Switch label="需要获取码" checked={on} onCheckedChange={openConfirm} />
+        <Switch label={t.accessSwitch} checked={on} onCheckedChange={openConfirm} />
         <Text variant="secondary" size="sm">
           {on
-            ? `已有 ${project.usedCodes} 个获取码下载过图。`
-            : `免码下载中，已下载 ${limitText}；每个 IP 每分钟最多 ${FREE_RATE_PER_MIN} 次。`}
+            ? t.accessOnInfo(project.usedCodes)
+            : t.accessOffInfo(project.freeDownloads, project.maxDownloads, FREE_RATE_PER_MIN)}
         </Text>
       </div>
       <div className="flex flex-wrap gap-2">
         {on ? (
-          <Button variant="primary" icon={<KeyRound size={16} />} loading={issuing} onClick={issue}>获取码</Button>
+          <Button variant="primary" icon={<KeyRound size={16} />} loading={issuing} onClick={issue}>{t.issueCode}</Button>
         ) : (
-          <Button variant="secondary" icon={<Pencil size={16} />} onClick={openEditMax}>下载上限</Button>
+          <Button variant="secondary" icon={<Pencil size={16} />} onClick={openEditMax}>{t.downloadLimit}</Button>
         )}
       </div>
 
       <Dialog.Root open={confirm} onOpenChange={setConfirm}>
         <Dialog size="base" className="px-6 py-5">
           <div className="grid gap-4">
-            <Dialog.Title className="text-base font-semibold">{on ? "关闭获取码？" : "开启获取码？"}</Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">{on ? t.confirmOffTitle : t.confirmOnTitle}</Dialog.Title>
             <Dialog.Description className="text-kumo-subtle">
               {on
-                ? `关闭后，任何人打开公开页都能直接下载原图。每个 IP 每分钟最多 ${FREE_RATE_PER_MIN} 次。`
-                : "开启后立即停止免码下载，已经发出去还没打开的免码下载链接也会失效。之后要填获取码才能下载。"}
+                ? t.confirmOffDesc(FREE_RATE_PER_MIN)
+                : t.confirmOnDesc}
             </Dialog.Description>
             {on && (
               <Input
-                label="最多下载多少次"
+                label={t.maxLabel}
                 type="number"
                 min={1}
-                placeholder="不限"
+                placeholder={t.maxPlaceholder}
                 value={max}
                 onChange={(e) => setMax(e.target.value)}
-                description="整个项目合计，比如 500。留空就不限。"
+                description={t.maxHintNew}
               />
             )}
             {error && <Text variant="error">{error}</Text>}
             <div className="flex justify-end gap-2">
-              <Dialog.Close render={(p) => <Button {...p} variant="secondary">取消</Button>} />
+              <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
               <Button variant={on ? "destructive" : "primary"} icon={on ? <Download size={16} /> : <KeyRound size={16} />} loading={busy} onClick={toggle}>
-                {on ? "关闭获取码" : "开启获取码"}
+                {on ? t.turnOff : t.turnOn}
               </Button>
             </div>
           </div>
@@ -153,20 +150,20 @@ export function AccessCard({ project, publicUrl, onSaved }: { project: ProjectSu
               saveMax();
             }}
           >
-            <Dialog.Title className="text-base font-semibold">免码下载上限</Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">{t.editMaxTitle}</Dialog.Title>
             <Input
-              label="最多下载多少次"
+              label={t.maxLabel}
               type="number"
               min={1}
-              placeholder="不限"
+              placeholder={t.maxPlaceholder}
               value={max}
               onChange={(e) => setMax(e.target.value)}
-              description={`整个项目合计，现在已下载 ${project.freeDownloads} 次。留空就不限。`}
+              description={t.maxHintEdit(project.freeDownloads)}
             />
             {error && <Text variant="error">{error}</Text>}
             <div className="flex justify-end gap-2">
-              <Dialog.Close render={(p) => <Button {...p} variant="secondary">取消</Button>} />
-              <Button variant="primary" type="submit" loading={busy}>保存</Button>
+              <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
+              <Button variant="primary" type="submit" loading={busy}>{t.save}</Button>
             </div>
           </form>
         </Dialog>

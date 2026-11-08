@@ -2,23 +2,24 @@
 import { Button, Text } from "@cloudflare/kumo";
 import { Grid3x3, KeyRound, Download } from "lucide-react";
 import { navigate } from "../router.ts";
-
-const STEPS = [
-  { icon: Grid3x3, title: "先看马赛克预览", body: "打开别人发给你的项目链接，所有图片都打了马赛克。" },
-  { icon: KeyRound, title: "填获取码", body: "在项目页填入获取码，就能看到每张图的下载按钮。" },
-  { icon: Download, title: "下载原图", body: "每个码每张图只能下一次，下过的图会换成清晰缩略图。" },
-];
+import { useI18n } from "../i18n/index.ts";
 
 export function HomePage() {
+  const { t } = useI18n();
+  const steps = [
+    { icon: Grid3x3, title: t.homeStep1Title, body: t.homeStep1Body },
+    { icon: KeyRound, title: t.homeStep2Title, body: t.homeStep2Body },
+    { icon: Download, title: t.homeStep3Title, body: t.homeStep3Body },
+  ];
   return (
     <main className="mx-auto grid max-w-3xl gap-10 px-5 py-20">
       <div className="grid gap-3">
-        <Text variant="heading" as="h1" size="lg">原图获取</Text>
-        <Text variant="secondary">这里放 Rei 分享的图片集。项目只能通过链接打开，没有公开列表。</Text>
+        <Text variant="heading" as="h1" size="lg">{t.appName}</Text>
+        <Text variant="secondary">{t.homeIntro}</Text>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
-        {STEPS.map((s) => (
-          <div key={s.title} className="grid content-start gap-2 rounded-xl bg-kumo-base p-5 ring ring-kumo-line">
+        {steps.map((s, i) => (
+          <div key={i} className="grid content-start gap-2 rounded-xl bg-kumo-base p-5 ring ring-kumo-line">
             <span className="flex size-9 items-center justify-center rounded-lg bg-kumo-recessed">
               <s.icon size={18} />
             </span>
@@ -28,7 +29,7 @@ export function HomePage() {
         ))}
       </div>
       <div>
-        <Button variant="secondary" onClick={() => navigate("/admin")}>进入后台</Button>
+        <Button variant="secondary" onClick={() => navigate("/admin")}>{t.homeEnterAdmin}</Button>
       </div>
     </main>
   );

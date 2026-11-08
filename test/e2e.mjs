@@ -45,7 +45,9 @@ ok((await fetch(`${B}/api/p/${slug}/mosaic/${imgs[0]}`)).status === 200, "马赛
 const gen = await j(`/api/admin/projects/${pid}/codes`, { method: "POST", json: { count: 3, expiresInDays: 7 } });
 ok(gen.status === 201 && gen.body.codes.length === 3, "生成 3 个码");
 const [c1, c2, c3] = gen.body.codes;
-ok((await j(`/api/p/${slug}/unlock`, { method: "POST", json: { code: "ZZZZ-ZZZZ" } })).status === 404, "错码 404");
+const wrong = await j(`/api/p/${slug}/unlock`, { method: "POST", json: { code: "ZZZZ-ZZZZ" } });
+ok(wrong.status === 404, "错码 404");
+ok(wrong.body?.code === "code_wrong" && wrong.body?.error === "获取码不对" && wrong.body?.status === 404, "错误体带 code、中文 error 和 status");
 const un = await j(`/api/p/${slug}/unlock`, { method: "POST", json: { code: c1.toLowerCase() } });
 ok(un.status === 200 && un.body.status === "active" && un.body.downloaded.length === 0, "小写码也能用，状态可用");
 
@@ -99,7 +101,12 @@ const f1 = await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId
 ok(f1.status === 200, "免码下载占位 200");
 const fr = await fetch(B + f1.body.url);
 ok(fr.status === 200, "免码票据拿到原图");
-ok((await fetch(B + f1.body.url)).status === 410, "免码票据只能用一次 410");
+const used = await fetch(B + f1.body.url, { headers: { "Accept-Language": "en-US,en;q=0.9" } });
+ok(used.status === 410, "免码票据只能用一次 410");
+const usedHtml = await used.text();
+ok(usedHtml.includes('lang="en"') && usedHtml.includes("410 No Longer Valid"), "下载出错页按 Accept-Language 显示英文");
+const usedZh = await (await fetch(B + f1.body.url, { headers: { "Accept-Language": "en", Cookie: "ct-lang=zh" } })).text();
+ok(usedZh.includes("410 已失效"), "下载出错页优先用 ct-lang cookie");
 const f2 = await j(`/api/p/${slug}/downloads`, { method: "POST", json: { imageId: imgs[0] } });
 ok(f2.status === 200, "免码同一张图可以再下");
 // 并发抢最后 1 次以内的名额：已用 2（1 done + 1 pending），并发 5 次只能成 1 次
@@ -124,6 +131,8 @@ ok(!after.some((c) => c.code === g1h.body.codes[0]) && after.some((c) => c.code 
 ok((await j(`/api/admin/projects`, { method: "POST", json: { title: "x" }, headers: { Origin: "https://evil.example" } })).status === 403, "跨站写请求 403");
 const csv = await fetch(`${B}/api/admin/projects/${pid}/codes.csv`);
 ok(csv.status === 200 && (await csv.text()).includes("已作废"), "CSV 导出");
+const csvEn = await (await fetch(`${B}/api/admin/projects/${pid}/codes.csv?lang=en`)).text();
+ok(csvEn.includes("Revoked") && csvEn.includes("Code,Status,Downloaded"), "CSV 按 lang 导出英文");
 // 删除项目
 ok((await j(`/api/admin/projects/${pid}`, { method: "DELETE" })).status === 200, "删除项目");
 ok((await j(`/api/p/${slug}`)).status === 404, "删掉后公开页 404");

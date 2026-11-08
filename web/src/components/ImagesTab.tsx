@@ -8,6 +8,7 @@ import { api, errMsg, uploadForm } from "../api.ts";
 import { ACCEPT, makePreviews } from "../lib/preview.ts";
 import { fmtBytes } from "../lib/format.ts";
 import type { Detail } from "../pages/AdminProjectPage.tsx";
+import { httpLine, useI18n } from "../i18n/index.ts";
 
 const MAX_BYTES = 95 * 1024 * 1024;
 const CONCURRENCY = 2;
@@ -22,11 +23,12 @@ function ImageCard({
   dragProps: React.HTMLAttributes<HTMLDivElement>;
   dragging: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div {...dragProps} className={`group grid overflow-hidden rounded-xl bg-kumo-base ring ring-kumo-line ${dragging ? "opacity-40" : ""}`}>
       <div className="relative aspect-[4/3] bg-kumo-recessed">
         <img src={`/api/admin/images/${img.id}/thumb`} alt={img.filename} loading="lazy" className="size-full object-contain" draggable={false} />
-        <span className="absolute left-2 top-2 flex size-7 cursor-grab items-center justify-center rounded-md bg-kumo-base/80 text-kumo-subtle" title="拖动排序">
+        <span className="absolute left-2 top-2 flex size-7 cursor-grab items-center justify-center rounded-md bg-kumo-base/80 text-kumo-subtle" title={t.dragToSort}>
           <GripVertical size={14} />
         </span>
       </div>
@@ -37,8 +39,8 @@ function ImageCard({
           {img.downloads > 0 ? <Badge variant="info" icon={<Download size={12} />}>{img.downloads}</Badge> : null}
         </div>
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="xs" shape="square" icon={<ExternalLink size={14} />} aria-label="看原图" title="看原图" onClick={() => window.open(`/api/admin/images/${img.id}/original`, "_blank", "noopener")} />
-          <Button variant="ghost" size="xs" shape="square" icon={<Trash2 size={14} />} aria-label="删除" title="删除" onClick={onDelete} />
+          <Button variant="ghost" size="xs" shape="square" icon={<ExternalLink size={14} />} aria-label={t.viewOriginal} title={t.viewOriginal} onClick={() => window.open(`/api/admin/images/${img.id}/original`, "_blank", "noopener")} />
+          <Button variant="ghost" size="xs" shape="square" icon={<Trash2 size={14} />} aria-label={t.delete} title={t.delete} onClick={onDelete} />
         </div>
       </div>
     </div>
@@ -47,6 +49,7 @@ function ImageCard({
 
 export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Promise<void> }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const projectId = detail.project.id;
   const [images, setImages] = useState(detail.images);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -97,7 +100,7 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
     if (!allSettled) return;
     void reload();
     const ok = queue.filter((q) => q.state === "done").length;
-    if (ok) toast.add({ title: `传好了 ${ok} 张` });
+    if (ok) toast.add({ title: t.uploadedToast(ok) });
     setQueue((q) => q.filter((it) => it.state === "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allSettled]);
@@ -108,9 +111,9 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
     for (const f of list) {
       const base = { key: `${f.name}-${f.size}-${Math.random()}`, file: f, progress: 0 };
       if (!/^image\/(jpeg|png|webp|avif|gif)$/.test(f.type)) {
-        items.push({ ...base, state: "error", error: /heic|heif/i.test(f.type + f.name) ? "415 格式不支持：HEIC 请先转成 JPEG" : "415 格式不支持：只收 JPEG、PNG、WebP、AVIF、GIF" });
+        items.push({ ...base, state: "error", error: httpLine(415, /heic|heif/i.test(f.type + f.name) ? t.heicNotSupported : t.typeNotSupported) });
       } else if (f.size > MAX_BYTES) {
-        items.push({ ...base, state: "error", error: "413 文件太大：单张最大 95MB" });
+        items.push({ ...base, state: "error", error: httpLine(413, t.fileTooLarge) });
       } else items.push({ ...base, state: "waiting" });
     }
     setQueue((q) => [...q.filter((it) => it.state !== "error"), ...items]);
@@ -121,7 +124,7 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
     try {
       await api(`/api/admin/projects/${projectId}/images/order`, { method: "PUT", json: { order: next.map((i) => i.id) } });
     } catch (e) {
-      toast.add({ title: "排序没保存", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.orderNotSaved, description: errMsg(e), variant: "error" });
       void reload();
     }
   };
@@ -131,11 +134,11 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
     setBusyDelete(true);
     try {
       await api(`/api/admin/images/${deleting.id}`, { method: "DELETE" });
-      toast.add({ title: `已删除 ${deleting.filename}` });
+      toast.add({ title: t.deletedToast(deleting.filename) });
       setDeleting(null);
       await reload();
     } catch (e) {
-      toast.add({ title: "删除失败", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.deleteFailed, description: errMsg(e), variant: "error" });
     } finally {
       setBusyDelete(false);
     }
@@ -160,10 +163,10 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
       >
         <ImagePlus size={28} className="text-kumo-subtle" />
         <div className="grid gap-1">
-          <Text>把图片拖到这里，或者</Text>
-          <Text variant="secondary" size="sm">JPEG、PNG、WebP、AVIF、GIF，单张最大 95MB。原图原样保存，预览图在浏览器里生成。</Text>
+          <Text>{t.dropHere}</Text>
+          <Text variant="secondary" size="sm">{t.dropHint}</Text>
         </div>
-        <Button variant="primary" icon={<Upload size={16} />} onClick={() => inputRef.current?.click()}>选择图片</Button>
+        <Button variant="primary" icon={<Upload size={16} />} onClick={() => inputRef.current?.click()}>{t.chooseImages}</Button>
         <input
           ref={inputRef}
           type="file"
@@ -184,14 +187,14 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
               <div className="flex items-center justify-between gap-2">
                 <Text size="sm" truncate>{q.file.name}</Text>
                 {q.state === "error" ? (
-                  <Button variant="ghost" size="xs" shape="square" icon={<X size={14} />} aria-label="移除" onClick={() => setQueue((all) => all.filter((it) => it.key !== q.key))} />
+                  <Button variant="ghost" size="xs" shape="square" icon={<X size={14} />} aria-label={t.removeFromList} onClick={() => setQueue((all) => all.filter((it) => it.key !== q.key))} />
                 ) : null}
               </div>
               {q.state === "error" ? (
                 <Text variant="error" size="sm">{q.error}</Text>
               ) : (
                 <Meter
-                  label={{ waiting: "排队中", preview: "生成预览图", uploading: "上传中", done: "完成" }[q.state]}
+                  label={{ waiting: t.queueWaiting, preview: t.queuePreview, uploading: t.queueUploading, done: t.queueDone }[q.state]}
                   value={Math.round(q.progress * 100)}
                   showValue
                 />
@@ -202,7 +205,7 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
       )}
 
       {images.length === 0 && queue.length === 0 ? (
-        <Empty icon={<ImagePlus size={32} />} title="还没有图片" description="传几张图，发布后访客就能看到马赛克预览。" />
+        <Empty icon={<ImagePlus size={32} />} title={t.noImagesTitle} description={t.noImagesDesc} />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {images.map((img, i) => (
@@ -240,13 +243,13 @@ export function ImagesTab({ detail, reload }: { detail: Detail; reload: () => Pr
       <Dialog.Root open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <Dialog size="base" className="px-6 py-5">
           <div className="grid gap-4">
-            <Dialog.Title className="text-base font-semibold">删除这张图？</Dialog.Title>
+            <Dialog.Title className="text-base font-semibold">{t.deleteImageTitle}</Dialog.Title>
             <Dialog.Description className="text-kumo-subtle">
-              {deleting?.filename} 的原图、预览图和下载记录都会删掉，删了不能恢复。
+              {t.deleteImageDesc(deleting?.filename ?? "")}
             </Dialog.Description>
             <div className="flex justify-end gap-2">
-              <Dialog.Close render={(p) => <Button {...p} variant="secondary">取消</Button>} />
-              <Button variant="destructive" loading={busyDelete} onClick={confirmDelete}>删除</Button>
+              <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
+              <Button variant="destructive" loading={busyDelete} onClick={confirmDelete}>{t.delete}</Button>
             </div>
           </div>
         </Dialog>

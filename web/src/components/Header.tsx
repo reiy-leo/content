@@ -1,35 +1,60 @@
-// 顶栏：左边站名，右边主题切换；后台页多一个账号菜单。
+// 顶栏：左边站名，右边语言和主题切换；后台页多一个账号菜单。
 import { useEffect, useState } from "react";
 import { Button, DropdownMenu, Text } from "@cloudflare/kumo";
-import { LogOut, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
+import { Globe, Languages, LogOut, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 import { getThemePref, setThemePref, type ThemePref } from "../theme.ts";
 import { linkClick } from "../router.ts";
 import { useMe } from "../lib/me.ts";
+import { LOCALES, setLocale, useI18n, type Dict } from "../i18n/index.ts";
+import { LOCALE_NAMES, htmlLang } from "../../../src/shared/i18n.ts";
 
-const THEMES: { value: ThemePref; label: string; icon: LucideIcon }[] = [
-  { value: "light", label: "浅色", icon: Sun },
-  { value: "dark", label: "深色", icon: Moon },
-  { value: "system", label: "跟随系统", icon: Monitor },
+const THEMES: { value: ThemePref; label: (t: Dict) => string; icon: LucideIcon }[] = [
+  { value: "light", label: (t) => t.themeLight, icon: Sun },
+  { value: "dark", label: (t) => t.themeDark, icon: Moon },
+  { value: "system", label: (t) => t.themeSystem, icon: Monitor },
 ];
 
-function ThemeMenu() {
-  const [pref, setPref] = useState<ThemePref>(getThemePref);
-  const Current = THEMES.find((t) => t.value === pref)!.icon;
+function LanguageMenu() {
+  const { t, locale, chosen } = useI18n();
   return (
     <DropdownMenu>
-      <DropdownMenu.Trigger render={<Button variant="ghost" shape="square" icon={<Current size={16} />} aria-label="主题" title="主题" />} />
+      <DropdownMenu.Trigger render={<Button variant="ghost" shape="square" icon={<Languages size={16} />} aria-label={t.language} title={t.language} />} />
       <DropdownMenu.Content align="end">
-        {THEMES.map((t) => (
+        <DropdownMenu.Item icon={<Globe size={16} />} onClick={() => setLocale(null)}>
+          {t.languageAuto}
+          {!chosen ? " ✓" : ""}
+        </DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        {LOCALES.map((l) => (
+          <DropdownMenu.Item key={l} onClick={() => setLocale(l)}>
+            <span lang={htmlLang(l)}>{LOCALE_NAMES[l]}</span>
+            {chosen && locale === l ? " ✓" : ""}
+          </DropdownMenu.Item>
+        ))}
+      </DropdownMenu.Content>
+    </DropdownMenu>
+  );
+}
+
+function ThemeMenu() {
+  const { t } = useI18n();
+  const [pref, setPref] = useState<ThemePref>(getThemePref);
+  const Current = THEMES.find((th) => th.value === pref)!.icon;
+  return (
+    <DropdownMenu>
+      <DropdownMenu.Trigger render={<Button variant="ghost" shape="square" icon={<Current size={16} />} aria-label={t.theme} title={t.theme} />} />
+      <DropdownMenu.Content align="end">
+        {THEMES.map((th) => (
           <DropdownMenu.Item
-            key={t.value}
-            icon={<t.icon size={16} />}
+            key={th.value}
+            icon={<th.icon size={16} />}
             onClick={() => {
-              setThemePref(t.value);
-              setPref(t.value);
+              setThemePref(th.value);
+              setPref(th.value);
             }}
           >
-            {t.label}
-            {pref === t.value ? " ✓" : ""}
+            {th.label(t)}
+            {pref === th.value ? " ✓" : ""}
           </DropdownMenu.Item>
         ))}
       </DropdownMenu.Content>
@@ -38,6 +63,7 @@ function ThemeMenu() {
 }
 
 function AccountMenu() {
+  const { t } = useI18n();
   const { user } = useMe();
   if (!user) return null;
   return (
@@ -62,7 +88,7 @@ function AccountMenu() {
             f.submit();
           }}
         >
-          退出登录
+          {t.logout}
         </DropdownMenu.Item>
       </DropdownMenu.Content>
     </DropdownMenu>
@@ -70,6 +96,7 @@ function AccountMenu() {
 }
 
 export function Header({ admin }: { admin: boolean }) {
+  const { t } = useI18n();
   const [, force] = useState(0);
   useEffect(() => {
     // 跟随系统时，系统主题变了也要刷新图标状态
@@ -83,10 +110,11 @@ export function Header({ admin }: { admin: boolean }) {
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-5">
         <a href={admin ? "/admin" : "/"} onClick={linkClick(admin ? "/admin" : "/")} className="flex items-center gap-2">
           <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
-          <Text variant="heading" as="span">原图获取</Text>
-          {admin && <Text variant="secondary" as="span">后台</Text>}
+          <Text variant="heading" as="span">{t.appName}</Text>
+          {admin && <Text variant="secondary" as="span">{t.adminBadge}</Text>}
         </a>
         <div className="flex items-center gap-1">
+          <LanguageMenu />
           <ThemeMenu />
           {admin && <AccountMenu />}
         </div>

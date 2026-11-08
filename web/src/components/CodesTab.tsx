@@ -5,18 +5,17 @@ import { AlertCircle, Ban, Copy, FileDown, KeyRound, ListChecks, Plus, RotateCcw
 import type { AdminCode, CodeDownload, CodeStatus, ProjectSummary } from "../../../src/shared/types.ts";
 import { api, errMsg } from "../api.ts";
 import { copyText, fmtTime } from "../lib/format.ts";
+import { getLocale, useI18n, type Dict } from "../i18n/index.ts";
 
-const EXPIRY: Record<string, string> = {
-  "1h": "1 小时", "1d": "1 天", "3d": "3 天", "7d": "7 天", "30d": "30 天", "90d": "90 天", never: "不过期", custom: "选日期",
-};
-const STATUS: Record<CodeStatus, { label: string; variant: "success" | "neutral" | "error" }> = {
-  active: { label: "可用", variant: "success" },
-  expired: { label: "已过期", variant: "neutral" },
-  revoked: { label: "已作废", variant: "error" },
-};
-const FILTERS: Record<string, string> = { all: "全部", active: "可用", expired: "已过期", revoked: "已作废" };
+const expiryItems = (t: Dict): Record<string, string> => ({
+  "1h": t.expiry1h, "1d": t.expiry1d, "3d": t.expiry3d, "7d": t.expiry7d, "30d": t.expiry30d, "90d": t.expiry90d, never: t.never, custom: t.expiryCustom,
+});
+const STATUS_VARIANT: Record<CodeStatus, "success" | "neutral" | "error"> = { active: "success", expired: "neutral", revoked: "error" };
+const statusLabel = (t: Dict, s: CodeStatus) => ({ active: t.statusActive, expired: t.statusExpired, revoked: t.statusRevoked })[s];
+const filterItems = (t: Dict): Record<string, string> => ({ all: t.filterAll, active: t.statusActive, expired: t.statusExpired, revoked: t.statusRevoked });
 
 function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: string; open: boolean; onOpenChange: (v: boolean) => void; onDone: (codes: string[]) => void }) {
+  const { t } = useI18n();
   const [count, setCount] = useState("10");
   const [expiry, setExpiry] = useState("7d");
   const [date, setDate] = useState("");
@@ -29,7 +28,7 @@ function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: 
     if (expiry === "never") body.expiresAt = null;
     else if (expiry === "1h") body.expiresInHours = 1;
     else if (expiry === "custom") {
-      if (!date) return setError("先选过期日期");
+      if (!date) return setError(t.pickDateFirst);
       // 选的那天结束时过期（浏览器本地时区）
       body.expiresAt = new Date(`${date}T23:59:59`).getTime();
     } else body.expiresInDays = parseInt(expiry, 10);
@@ -55,15 +54,15 @@ function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: 
             void submit();
           }}
         >
-          <Dialog.Title className="text-base font-semibold">生成获取码</Dialog.Title>
-          <Input label="数量" type="number" min={1} max={500} value={count} onChange={(e) => setCount(e.target.value)} description="一次 1 到 500 个" />
-          <Select label="有效期" hideLabel={false} value={expiry} onValueChange={(v) => setExpiry(String(v))} items={EXPIRY} />
-          {expiry === "custom" && <Input label="过期日期" type="date" value={date} onChange={(e) => setDate(e.target.value)} description="这一天结束时过期" />}
-          <Input label="备注" placeholder="可不填，比如：给小王" value={note} onChange={(e) => setNote(e.target.value)} />
+          <Dialog.Title className="text-base font-semibold">{t.generateCodes}</Dialog.Title>
+          <Input label={t.count} type="number" min={1} max={500} value={count} onChange={(e) => setCount(e.target.value)} description={t.countHint} />
+          <Select label={t.validity} hideLabel={false} value={expiry} onValueChange={(v) => setExpiry(String(v))} items={expiryItems(t)} />
+          {expiry === "custom" && <Input label={t.expiryDate} type="date" value={date} onChange={(e) => setDate(e.target.value)} description={t.expiryDateHint} />}
+          <Input label={t.note} placeholder={t.notePlaceholder} value={note} onChange={(e) => setNote(e.target.value)} />
           {error && <Text variant="error">{error}</Text>}
           <div className="flex justify-end gap-2">
-            <Dialog.Close render={(p) => <Button {...p} variant="secondary">取消</Button>} />
-            <Button variant="primary" type="submit" loading={busy}>生成</Button>
+            <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
+            <Button variant="primary" type="submit" loading={busy}>{t.generate}</Button>
           </div>
         </form>
       </Dialog>
@@ -73,11 +72,12 @@ function GenerateDialog({ projectId, open, onOpenChange, onDone }: { projectId: 
 
 function NewCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: () => void }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   return (
     <Dialog.Root open={codes !== null} onOpenChange={(v) => !v && onClose()}>
       <Dialog size="base" className="px-6 py-5">
         <div className="grid gap-4">
-          <Dialog.Title className="text-base font-semibold">生成了 {codes?.length ?? 0} 个获取码</Dialog.Title>
+          <Dialog.Title className="text-base font-semibold">{t.generatedTitle(codes?.length ?? 0)}</Dialog.Title>
           <pre className="max-h-72 overflow-auto rounded-lg bg-kumo-recessed p-3 font-mono text-sm">{codes?.join("\n")}</pre>
           <div className="flex justify-end gap-2">
             <Button
@@ -85,12 +85,12 @@ function NewCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: (
               icon={<Copy size={16} />}
               onClick={async () => {
                 await copyText(codes?.join("\n") ?? "");
-                toast.add({ title: "已复制" });
+                toast.add({ title: t.copied });
               }}
             >
-              全部复制
+              {t.copyAll}
             </Button>
-            <Dialog.Close render={(p) => <Button {...p} variant="primary">好了</Button>} />
+            <Dialog.Close render={(p) => <Button {...p} variant="primary">{t.done}</Button>} />
           </div>
         </div>
       </Dialog>
@@ -99,6 +99,7 @@ function NewCodesDialog({ codes, onClose }: { codes: string[] | null; onClose: (
 }
 
 function DownloadsDialog({ code, imageCount, onClose }: { code: AdminCode | null; imageCount: number; onClose: () => void }) {
+  const { t } = useI18n();
   const [rows, setRows] = useState<CodeDownload[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -112,26 +113,26 @@ function DownloadsDialog({ code, imageCount, onClose }: { code: AdminCode | null
       <Dialog size="lg" className="px-6 py-5">
         <div className="grid gap-4">
           <Dialog.Title className="text-base font-semibold">
-            {code?.code} 的下载明细（{code?.downloaded ?? 0}/{imageCount}）
+            {t.downloadsTitle(code?.code ?? "", code?.downloaded ?? 0, imageCount)}
           </Dialog.Title>
           {error && <Text variant="error">{error}</Text>}
           {!rows && !error && <Loader />}
-          {rows && rows.length === 0 && <Text variant="secondary">这个码还没下过图。</Text>}
+          {rows && rows.length === 0 && <Text variant="secondary">{t.noDownloadsYet}</Text>}
           {rows && rows.length > 0 && (
             <div className="max-h-96 overflow-auto rounded-lg ring ring-kumo-line">
               <Table>
                 <Table.Header>
                   <Table.Row>
-                    <Table.Head>文件</Table.Head>
-                    <Table.Head>状态</Table.Head>
-                    <Table.Head>时间</Table.Head>
+                    <Table.Head>{t.colFile}</Table.Head>
+                    <Table.Head>{t.colStatus}</Table.Head>
+                    <Table.Head>{t.colTime}</Table.Head>
                   </Table.Row>
                 </Table.Header>
                 <Table.Body>
                   {rows.map((r) => (
                     <Table.Row key={r.imageId}>
                       <Table.Cell>{r.filename}</Table.Cell>
-                      <Table.Cell>{r.status === "done" ? <Badge variant="success">已下载</Badge> : <Badge variant="neutral">已点下载、没开始传</Badge>}</Table.Cell>
+                      <Table.Cell>{r.status === "done" ? <Badge variant="success">{t.dlDone}</Badge> : <Badge variant="neutral">{t.dlPending}</Badge>}</Table.Cell>
                       <Table.Cell>{fmtTime(r.completedAt ?? r.createdAt)}</Table.Cell>
                     </Table.Row>
                   ))}
@@ -140,7 +141,7 @@ function DownloadsDialog({ code, imageCount, onClose }: { code: AdminCode | null
             </div>
           )}
           <div className="flex justify-end">
-            <Dialog.Close render={(p) => <Button {...p} variant="secondary">关闭</Button>} />
+            <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.close}</Button>} />
           </div>
         </div>
       </Dialog>
@@ -150,6 +151,7 @@ function DownloadsDialog({ code, imageCount, onClose }: { code: AdminCode | null
 
 export function CodesTab({ project, imageCount, reload }: { project: ProjectSummary; imageCount: number; reload: () => Promise<void> }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const [codes, setCodes] = useState<AdminCode[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
@@ -184,11 +186,11 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
     setBusy(true);
     try {
       await api(`/api/admin/projects/${project.id}/codes/revoke`, { method: "POST", json: { ids, restore } });
-      toast.add({ title: restore ? `已恢复 ${ids.length} 个` : `已作废 ${ids.length} 个` });
+      toast.add({ title: restore ? t.restoredToast(ids.length) : t.revokedToast(ids.length) });
       setSelected(new Set());
       load();
     } catch (e) {
-      toast.add({ title: "操作失败", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.actionFailed, description: errMsg(e), variant: "error" });
     } finally {
       setBusy(false);
     }
@@ -207,22 +209,22 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setGenerating(true)}>生成获取码</Button>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setGenerating(true)}>{t.generateCodes}</Button>
           <Select
-            aria-label="按状态筛选"
+            aria-label={t.filterByStatus}
             value={filter}
             onValueChange={(v) => {
               setFilter(String(v));
               setSelected(new Set());
             }}
-            items={Object.fromEntries(Object.entries(FILTERS).map(([k, v]) => [k, `${v} ${counts[k] ?? 0}`]))}
+            items={Object.fromEntries(Object.entries(filterItems(t)).map(([k, v]) => [k, `${v} ${counts[k] ?? 0}`]))}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {selected.size > 0 && (
             <>
-              <Button variant="secondary" icon={<Ban size={16} />} loading={busy} onClick={() => setRevoked([...selected], false)}>作废选中的 {selected.size} 个</Button>
-              <Button variant="secondary" icon={<RotateCcw size={16} />} disabled={busy} onClick={() => setRevoked([...selected], true)}>恢复</Button>
+              <Button variant="secondary" icon={<Ban size={16} />} loading={busy} onClick={() => setRevoked([...selected], false)}>{t.revokeSelected(selected.size)}</Button>
+              <Button variant="secondary" icon={<RotateCcw size={16} />} disabled={busy} onClick={() => setRevoked([...selected], true)}>{t.restore}</Button>
             </>
           )}
           <Button
@@ -231,25 +233,25 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
             disabled={!counts.active}
             onClick={async () => {
               await copyText((codes ?? []).filter((c) => c.status === "active").map((c) => c.code).join("\n"));
-              toast.add({ title: `已复制 ${counts.active} 个可用的码` });
+              toast.add({ title: t.copiedActive(counts.active ?? 0) });
             }}
           >
-            复制可用的码
+            {t.copyActive}
           </Button>
-          <Button variant="secondary" icon={<FileDown size={16} />} disabled={!counts.all} onClick={() => (location.href = `/api/admin/projects/${project.id}/codes.csv`)}>
-            导出 CSV
+          <Button variant="secondary" icon={<FileDown size={16} />} disabled={!counts.all} onClick={() => (location.href = `/api/admin/projects/${project.id}/codes.csv?lang=${getLocale()}`)}>
+            {t.exportCsv}
           </Button>
         </div>
       </div>
 
-      {error && <Banner variant="error" icon={<AlertCircle size={16} />} title="加载失败" description={error} />}
+      {error && <Banner variant="error" icon={<AlertCircle size={16} />} title={t.loadFailed} description={error} />}
       {!codes && !error && <Loader />}
       {codes && codes.length === 0 && (
         <Empty
           icon={<KeyRound size={32} />}
-          title="还没有获取码"
-          description={project.status === "published" ? "生成一批码，发给要下载原图的人。" : "可以先生成，项目发布后才能用。"}
-          contents={<Button variant="primary" onClick={() => setGenerating(true)}>生成获取码</Button>}
+          title={t.noCodesTitle}
+          description={project.status === "published" ? t.noCodesDescPublished : t.noCodesDescDraft}
+          contents={<Button variant="primary" onClick={() => setGenerating(true)}>{t.generateCodes}</Button>}
         />
       )}
       {codes && codes.length > 0 && (
@@ -261,36 +263,36 @@ export function CodesTab({ project, imageCount, reload }: { project: ProjectSumm
                   checked={allChecked}
                   indeterminate={!allChecked && shown.some((c) => selected.has(c.id))}
                   onCheckedChange={() => setSelected(allChecked ? new Set() : new Set(shown.map((c) => c.id)))}
-                  aria-label="全选"
+                  aria-label={t.selectAll}
                 />
-                <Table.Head>获取码</Table.Head>
-                <Table.Head>状态</Table.Head>
-                <Table.Head>已下载</Table.Head>
-                <Table.Head>最后下载</Table.Head>
-                <Table.Head>过期时间</Table.Head>
-                <Table.Head>备注</Table.Head>
+                <Table.Head>{t.colCode}</Table.Head>
+                <Table.Head>{t.colStatus}</Table.Head>
+                <Table.Head>{t.colDownloaded}</Table.Head>
+                <Table.Head>{t.colLastDownload}</Table.Head>
+                <Table.Head>{t.colExpires}</Table.Head>
+                <Table.Head>{t.colNote}</Table.Head>
                 <Table.Head />
               </Table.Row>
             </Table.Header>
             <Table.Body>
               {shown.map((c) => (
                 <Table.Row key={c.id} variant={selected.has(c.id) ? "selected" : "default"}>
-                  <Table.CheckCell checked={selected.has(c.id)} onCheckedChange={() => toggle(c.id)} aria-label={`选择 ${c.code}`} />
+                  <Table.CheckCell checked={selected.has(c.id)} onCheckedChange={() => toggle(c.id)} aria-label={t.selectCode(c.code)} />
                   <Table.Cell>
-                    <InlineCopyText variant="mono" labels={{ copyAction: "复制", copied: "已复制" }}>{c.code}</InlineCopyText>
+                    <InlineCopyText variant="mono" labels={{ copyAction: t.copy, copied: t.copied }}>{c.code}</InlineCopyText>
                   </Table.Cell>
-                  <Table.Cell><Badge variant={STATUS[c.status].variant}>{STATUS[c.status].label}</Badge></Table.Cell>
+                  <Table.Cell><Badge variant={STATUS_VARIANT[c.status]}>{statusLabel(t, c.status)}</Badge></Table.Cell>
                   <Table.Cell>{c.downloaded} / {imageCount}</Table.Cell>
                   <Table.Cell>{fmtTime(c.lastDownloadAt)}</Table.Cell>
-                  <Table.Cell>{c.expiresAt ? fmtTime(c.expiresAt) : "不过期"}</Table.Cell>
+                  <Table.Cell>{c.expiresAt ? fmtTime(c.expiresAt) : t.never}</Table.Cell>
                   <Table.Cell><Text variant="secondary" size="sm" truncate>{c.note ?? ""}</Text></Table.Cell>
                   <Table.Cell>
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="xs" shape="square" icon={<ListChecks size={14} />} aria-label="下载明细" title="下载明细" onClick={() => setDetail(c)} />
+                      <Button variant="ghost" size="xs" shape="square" icon={<ListChecks size={14} />} aria-label={t.downloadDetails} title={t.downloadDetails} onClick={() => setDetail(c)} />
                       {c.status === "revoked" ? (
-                        <Button variant="ghost" size="xs" shape="square" icon={<RotateCcw size={14} />} aria-label="恢复" title="恢复" disabled={busy} onClick={() => setRevoked([c.id], true)} />
+                        <Button variant="ghost" size="xs" shape="square" icon={<RotateCcw size={14} />} aria-label={t.restore} title={t.restore} disabled={busy} onClick={() => setRevoked([c.id], true)} />
                       ) : (
-                        <Button variant="ghost" size="xs" shape="square" icon={<Ban size={14} />} aria-label="作废" title="作废" disabled={busy} onClick={() => setRevoked([c.id], false)} />
+                        <Button variant="ghost" size="xs" shape="square" icon={<Ban size={14} />} aria-label={t.revoke} title={t.revoke} disabled={busy} onClick={() => setRevoked([c.id], false)} />
                       )}
                     </div>
                   </Table.Cell>

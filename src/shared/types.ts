@@ -1,4 +1,5 @@
 // 前后端共用的类型。
+import type { ErrorCode, ErrorParams } from "./errors.ts";
 export type LoginError = "unconfigured" | "denied" | "state" | "token" | "id_token" | "unverified" | "forbidden";
 
 export interface SessionInfo { email: string; name?: string; picture?: string }
@@ -73,22 +74,17 @@ export interface UnlockResult {
   downloaded: string[];
 }
 
-export interface ApiError { error: string; status: number }
+export interface ApiError {
+  /** 中文说明 */
+  error: string;
+  /** 固定的错误键，前端按它翻译，见 shared/errors.ts */
+  code?: ErrorCode;
+  params?: ErrorParams;
+  status: number;
+}
 
-/** 状态码的中文说明 */
-export const STATUS_TEXT: Record<number, string> = {
-  400: "请求有误",
-  401: "未登录",
-  403: "无权限",
-  404: "找不到",
-  409: "冲突",
-  410: "已失效",
-  413: "文件太大",
-  415: "格式不支持",
-  429: "请求太多",
-  500: "服务器出错",
-  503: "服务暂不可用",
-};
+/** 状态码说明（各语言）在 shared/i18n.ts；这里转出中文版，兼容旧引用 */
+export { STATUS_TEXT } from "./i18n.ts";
 
 /** 免码下载：每个 IP 每分钟次数（wrangler.jsonc 的 FREE_LIMITER 要一致） */
 export const FREE_RATE_PER_MIN = 50;

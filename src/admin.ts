@@ -1,6 +1,7 @@
 // 后台接口（/api/admin/*），调用前已校验管理员登录。
 import { nanoid } from "nanoid";
 import type { Env } from "./env.ts";
+import { CSV_TEXTS, isLocale } from "./shared/i18n.ts";
 import { HttpError, contentDisposition, json, now, readJson } from "./http.ts";
 import { codeStatus, generateCode } from "./codes.ts";
 import { SLUG_RE, formatCode, type AdminCode, type AdminImage, type CodeDownload, type ProjectSummary } from "./shared/types.ts";
@@ -37,26 +38,26 @@ const PROJECT_SELECT = `SELECT p.*,
 
 async function getProject(env: Env, id: string): Promise<ProjectRow> {
   const row = await env.DB.prepare(`${PROJECT_SELECT} WHERE p.id = ?`).bind(id).first<ProjectRow>();
-  if (!row) throw new HttpError(404, "项目不存在");
+  if (!row) throw new HttpError(404, "project_not_found");
   return row;
 }
 
 function cleanSlug(v: unknown): string {
   const s = String(v ?? "").trim().toLowerCase();
-  if (!SLUG_RE.test(s)) throw new HttpError(400, "短地址只能用小写字母、数字和横线，1 到 48 位，不能以横线开头或结尾");
+  if (!SLUG_RE.test(s)) throw new HttpError(400, "slug_invalid");
   return s;
 }
 
 function cleanTitle(v: unknown): string {
   const s = String(v ?? "").trim();
-  if (!s || s.length > 100) throw new HttpError(400, "项目名不能为空，最多 100 字");
+  if (!s || s.length > 100) throw new HttpError(400, "title_invalid");
   return s;
 }
 
 function cleanDescription(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
-  if (s.length > 1000) throw new HttpError(400, "简介最多 1000 字");
+  if (s.length > 1000) throw new HttpError(400, "description_too_long");
   return s || null;
 }
 
@@ -84,7 +85,7 @@ export async function createProject(req: Request, env: Env) {
       "INSERT INTO projects (id, slug, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', ?, ?)",
     ).bind(id, slug, title, cleanDescription(body.description), t, t).run();
   } catch (e) {
-    if (isUniqueError(e)) throw new HttpError(409, "这个短地址已经被别的项目用了");
+    if (isUniqueError(e)) throw new HttpError(409, "slug_taken");
     throw e;
   }
   return json(toSummary(await getProject(env, id)), { status: 201 });
@@ -114,7 +115,7 @@ export async function updateProject(req: Request, env: Env, id: string) {
   const description = body.description !== undefined ? cleanDescription(body.description) : p.description;
   let codeRequired = p.code_required;
   if (body.codeRequired !== undefined) {
-    if (typeof body.codeRequired !== "boolean") throw new HttpError(400, "codeRequired 只能是 true 或 false");
+    if (typeof body.codeRequired !== "boolean") throw new HttpError(400, "code_required_bool");
     codeRequired = body.codeRequired ? 1 : 0;
   }
   let maxDownloads = p.max_downloads;
@@ -122,16 +123,16 @@ export async function updateProject(req: Request, env: Env, id: string) {
     if (body.maxDownloads === null) maxDownloads = null;
     else {
       const n = Number(body.maxDownloads);
-      if (!Number.isInteger(n) || n < 1 || n > MAX_DOWNLOADS_LIMIT) throw new HttpError(400, "下载上限要是 1 到 1000000 的整数，不限就留空");
+      if (!Number.isInteger(n) || n < 1 || n > MAX_DOWNLOADS_LIMIT) throw new HttpError(400, "max_downloads_invalid");
       maxDownloads = n;
     }
   }
   let status = p.status;
   let publishedAt = p.published_at;
   if (body.status !== undefined) {
-    if (body.status !== "draft" && body.status !== "published") throw new HttpError(400, "状态只能是 draft 或 published");
+    if (body.status !== "draft" && body.status !== "published") throw new HttpError(400, "status_invalid");
     if (body.status === "published" && status !== "published") {
-      if (!p.image_count) throw new HttpError(400, "项目里还没有图片，不能发布");
+      if (!p.image_count) throw new HttpError(400, "publish_empty");
       publishedAt = now();
     }
     status = body.status;
@@ -141,7 +142,7 @@ export async function updateProject(req: Request, env: Env, id: string) {
       "UPDATE projects SET title = ?, slug = ?, description = ?, status = ?, published_at = ?, code_required = ?, max_downloads = ?, updated_at = ? WHERE id = ?",
     ).bind(title, slug, description, status, publishedAt, codeRequired, maxDownloads, now(), id).run();
   } catch (e) {
-    if (isUniqueError(e)) throw new HttpError(409, "这个短地址已经被别的项目用了");
+    if (isUniqueError(e)) throw new HttpError(409, "slug_taken");
     throw e;
   }
   return json(toSummary(await getProject(env, id)));
@@ -178,26 +179,26 @@ export async function deleteProject(env: Env, id: string, ctx: ExecutionContext)
 export async function uploadImage(req: Request, env: Env, projectId: string) {
   await getProject(env, projectId);
   const len = Number(req.headers.get("Content-Length") ?? 0);
-  if (len > MAX_ORIGINAL_BYTES + 2 * MAX_PREVIEW_BYTES) throw new HttpError(413, "单张原图最大 95MB");
+  if (len > MAX_ORIGINAL_BYTES + 2 * MAX_PREVIEW_BYTES) throw new HttpError(413, "file_too_large");
   let form: FormData;
   try {
     form = await req.formData();
   } catch {
-    throw new HttpError(400, "上传内容格式不对");
+    throw new HttpError(400, "bad_upload");
   }
   const original = form.get("original");
   const mosaic = form.get("mosaic");
   const thumb = form.get("thumb");
   if (!(original instanceof File) || !(mosaic instanceof File) || !(thumb instanceof File)) {
-    throw new HttpError(400, "缺少原图、马赛克图或缩略图");
+    throw new HttpError(400, "missing_files");
   }
-  if (original.size > MAX_ORIGINAL_BYTES) throw new HttpError(413, "单张原图最大 95MB");
-  if (mosaic.size > MAX_PREVIEW_BYTES || thumb.size > MAX_PREVIEW_BYTES) throw new HttpError(413, "预览图太大");
+  if (original.size > MAX_ORIGINAL_BYTES) throw new HttpError(413, "file_too_large");
+  if (mosaic.size > MAX_PREVIEW_BYTES || thumb.size > MAX_PREVIEW_BYTES) throw new HttpError(413, "preview_too_large");
   const mime = original.type || "application/octet-stream";
-  if (!ALLOWED_MIME.has(mime)) throw new HttpError(415, "只支持 JPEG、PNG、WebP、AVIF、GIF");
+  if (!ALLOWED_MIME.has(mime)) throw new HttpError(415, "unsupported_type");
   const width = Math.round(Number(form.get("width")));
   const height = Math.round(Number(form.get("height")));
-  if (!(width > 0 && height > 0)) throw new HttpError(400, "缺少图片宽高");
+  if (!(width > 0 && height > 0)) throw new HttpError(400, "missing_size");
   const filename = (String(form.get("filename") ?? original.name ?? "image") || "image").slice(0, 200);
 
   const id = nanoid();
@@ -226,14 +227,14 @@ interface ImageRow { id: string; project_id: string; filename: string; mime: str
 
 async function getImage(env: Env, id: string): Promise<ImageRow> {
   const row = await env.DB.prepare("SELECT * FROM images WHERE id = ?").bind(id).first<ImageRow>();
-  if (!row) throw new HttpError(404, "图片不存在");
+  if (!row) throw new HttpError(404, "image_not_found");
   return row;
 }
 
 export async function reorderImages(req: Request, env: Env, projectId: string) {
   await getProject(env, projectId);
   const body = await readJson<{ order?: string[] }>(req);
-  if (!Array.isArray(body.order)) throw new HttpError(400, "缺少排序");
+  if (!Array.isArray(body.order)) throw new HttpError(400, "order_missing");
   const stmts = body.order.map((imageId, i) =>
     env.DB.prepare("UPDATE images SET position = ? WHERE id = ? AND project_id = ?").bind(i, String(imageId), projectId),
   );
@@ -257,7 +258,7 @@ export async function adminImageFile(env: Env, id: string, kind: "original" | "t
   const img = await getImage(env, id);
   const key = kind === "original" ? img.original_key : kind === "thumb" ? img.thumb_key : img.mosaic_key;
   const obj = await env.BUCKET.get(key);
-  if (!obj) throw new HttpError(404, "文件不存在");
+  if (!obj) throw new HttpError(404, "file_not_found");
   return new Response(obj.body, {
     headers: {
       "Content-Type": kind === "original" ? img.mime : obj.httpMetadata?.contentType ?? "image/webp",
@@ -299,17 +300,17 @@ export async function createCodes(req: Request, env: Env, projectId: string) {
   await getProject(env, projectId);
   const body = await readJson<{ count?: number; expiresAt?: number | null; expiresInDays?: number; expiresInHours?: number; note?: string }>(req);
   const count = Math.floor(Number(body.count ?? 10));
-  if (!(count >= 1 && count <= 500)) throw new HttpError(400, "一次生成 1 到 500 个");
+  if (!(count >= 1 && count <= 500)) throw new HttpError(400, "code_count_invalid");
   const t = now();
   let expiresAt: number | null;
   if (body.expiresAt === null) expiresAt = null;
   else if (typeof body.expiresAt === "number") expiresAt = body.expiresAt;
   else if (body.expiresInHours !== undefined) {
     const h = Number(body.expiresInHours);
-    if (!(h > 0 && h <= 24 * 365)) throw new HttpError(400, "有效小时数不对");
+    if (!(h > 0 && h <= 24 * 365)) throw new HttpError(400, "expiry_hours_invalid");
     expiresAt = t + h * HOUR;
   } else expiresAt = t + (Number(body.expiresInDays ?? 7) || 7) * DAY;
-  if (expiresAt !== null && expiresAt <= t) throw new HttpError(400, "过期时间要晚于现在");
+  if (expiresAt !== null && expiresAt <= t) throw new HttpError(400, "expiry_in_past");
   const note = body.note ? String(body.note).trim().slice(0, 200) || null : null;
 
   const batchId = nanoid();
@@ -332,7 +333,7 @@ export async function createCodes(req: Request, env: Env, projectId: string) {
 export async function revokeCodes(req: Request, env: Env, projectId: string) {
   await getProject(env, projectId);
   const body = await readJson<{ ids?: string[]; restore?: boolean }>(req);
-  if (!Array.isArray(body.ids) || !body.ids.length) throw new HttpError(400, "没有选中获取码");
+  if (!Array.isArray(body.ids) || !body.ids.length) throw new HttpError(400, "no_codes_selected");
   const t = body.restore ? null : now();
   await env.DB.batch(
     body.ids.slice(0, 500).map((id) =>
@@ -358,15 +359,15 @@ const csvCell = (v: unknown) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-const STATUS_ZH = { active: "可用", expired: "已过期", revoked: "已作废" } as const;
-
-export async function codesCsv(env: Env, projectId: string) {
+/** 导出 CSV。?lang= 决定表头和状态用哪种语言，默认中文 */
+export async function codesCsv(env: Env, projectId: string, lang: string | null) {
+  const text = CSV_TEXTS[isLocale(lang) ? lang : "zh"];
   const p = await getProject(env, projectId);
   const at = now();
   const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "");
-  const lines = [["获取码", "状态", "已下载", "过期时间(UTC)", "备注", "创建时间(UTC)"].join(",")];
+  const lines = [text.headers.join(",")];
   for (const r of await codeRows(env, projectId)) {
-    lines.push([formatCode(r.code), STATUS_ZH[codeStatus(r, at)], `${r.downloaded}/${p.image_count ?? 0}`, iso(r.expires_at), r.note, iso(r.created_at)].map(csvCell).join(","));
+    lines.push([formatCode(r.code), text.status[codeStatus(r, at)], `${r.downloaded}/${p.image_count ?? 0}`, iso(r.expires_at), r.note, iso(r.created_at)].map(csvCell).join(","));
   }
   return new Response("\ufeff" + lines.join("\n") + "\n", {
     headers: {

@@ -5,7 +5,8 @@ import { HttpError, checkOrigin, errorResponse, json } from "./http.ts";
 import * as admin from "./admin.ts";
 import * as pub from "./public.ts";
 import { INLINE_ASSETS } from "./assets.generated.ts";
-import { STATUS_TEXT } from "./shared/types.ts";
+import { htmlLang, isLocale, LANG_KEY, matchLocale, parseAcceptLanguage, statusLabel, type Locale } from "./shared/i18n.ts";
+import { errorText } from "./shared/errors.ts";
 import { cleanup } from "./cleanup.ts";
 import { isAuthDisabled } from "./env.ts";
 
@@ -41,12 +42,21 @@ function spa(): Response {
   return new Response(r.body, { headers });
 }
 
-function dlErrorPage(status: number, message: string) {
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${status} ${STATUS_TEXT[status] ?? ""}</title>
+/** 出错页用哪种语言：先看用户在页面上选过的（cookie ct-lang），再看 Accept-Language */
+function requestLocale(req: Request): Locale {
+  const m = (req.headers.get("Cookie") ?? "").match(new RegExp(`(?:^|;\\s*)${LANG_KEY}=([a-z]{2})`));
+  if (m && isLocale(m[1])) return m[1];
+  return matchLocale(parseAcceptLanguage(req.headers.get("Accept-Language")));
+}
+
+function dlErrorPage(e: HttpError, locale: Locale) {
+  const title = statusLabel(locale, e.status);
+  const message = errorText(locale, e.code, e.params);
+  const html = `<!doctype html><html lang="${htmlLang(locale)}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
 <body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1.25rem;line-height:1.6">
-<h1 style="font-size:1.125rem;font-weight:600">${status} ${STATUS_TEXT[status] ?? ""}</h1><p>${message}</p></body></html>`;
-  return new Response(html, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+<h1 style="font-size:1.125rem;font-weight:600">${title}</h1><p>${message}</p></body></html>`;
+  return new Response(html, { status: e.status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -65,7 +75,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     try {
       return await pub.download(env, r[1]!);
     } catch (e) {
-      if (e instanceof HttpError) return dlErrorPage(e.status, e.message);
+      if (e instanceof HttpError) return dlErrorPage(e, requestLocale(req));
       throw e;
     }
   }
@@ -94,7 +104,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     // 后台接口
     if (path.startsWith("/api/admin/")) {
       const user = await getUser(req, env);
-      if (!user) throw new HttpError(401, "请先登录");
+      if (!user) throw new HttpError(401, "login_required");
       const sub = path.slice("/api/admin".length);
       if (sub === "/projects" && m === "GET") return admin.listProjects(env);
       if (sub === "/projects" && m === "POST") return admin.createProject(req, env);
@@ -110,14 +120,14 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
         if (m === "POST") return admin.createCodes(req, env, r[1]!);
       }
       if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\/revoke$/)) && m === "POST") return admin.revokeCodes(req, env, r[1]!);
-      if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\.csv$/)) && m === "GET") return admin.codesCsv(env, r[1]!);
+      if ((r = sub.match(/^\/projects\/([\w-]+)\/codes\.csv$/)) && m === "GET") return admin.codesCsv(env, r[1]!, url.searchParams.get("lang"));
       if ((r = sub.match(/^\/codes\/([\w-]+)\/downloads$/)) && m === "GET") return admin.codeDownloads(env, r[1]!);
       if ((r = sub.match(/^\/images\/([\w-]+)$/)) && m === "DELETE") return admin.deleteImage(env, r[1]!);
       if ((r = sub.match(/^\/images\/([\w-]+)\/(original|thumb|mosaic)$/)) && m === "GET") {
         return admin.adminImageFile(env, r[1]!, r[2] as "original" | "thumb" | "mosaic");
       }
     }
-    throw new HttpError(404, "接口不存在");
+    throw new HttpError(404, "api_not_found");
   }
 
   // 前端
@@ -127,7 +137,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     if (path === "/" || path === "/admin" || path.startsWith("/admin/") || /^\/p\/[a-z0-9-]+\/?$/.test(path)) return spa();
     return spa(); // 前端自己显示 404 页
   }
-  throw new HttpError(404);
+  throw new HttpError(404, "not_found");
 }
 
 export default {
@@ -136,10 +146,10 @@ export default {
     try {
       res = await route(req, env, ctx);
     } catch (e) {
-      if (e instanceof HttpError) res = errorResponse(e.status, e.message);
+      if (e instanceof HttpError) res = errorResponse(e);
       else {
         console.error("unhandled", e);
-        res = errorResponse(500, "服务器出错了");
+        res = errorResponse(new HttpError(500, "server_error"));
       }
     }
     const headers = new Headers(res.headers);

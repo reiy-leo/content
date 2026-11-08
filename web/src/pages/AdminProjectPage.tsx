@@ -10,11 +10,13 @@ import { CodesTab } from "../components/CodesTab.tsx";
 import { SettingsTab } from "../components/SettingsTab.tsx";
 import { NotFound } from "../components/NotFound.tsx";
 import { AccessCard } from "../components/AccessCard.tsx";
+import { useI18n } from "../i18n/index.ts";
 
 export interface Detail { project: ProjectSummary; images: AdminImage[] }
 
 export function AdminProjectPage({ id }: { id: string }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<{ status: number; msg: string } | null>(null);
   const [tab, setTab] = useState(() => new URL(location.href).searchParams.get("tab") ?? "images");
@@ -37,11 +39,11 @@ export function AdminProjectPage({ id }: { id: string }) {
     history.replaceState(history.state, "", url.pathname + url.search);
   };
 
-  if (error?.status === 404) return <NotFound title="404 项目不存在" description="可能已经删掉了。" />;
+  if (error?.status === 404) return <NotFound title={t.projectGoneTitle} description={t.projectGoneDesc} />;
   if (!detail) {
     return (
       <main className="mx-auto max-w-6xl px-5 py-8">
-        {error ? <Banner variant="error" icon={<AlertCircle size={16} />} title="加载失败" description={error.msg} /> : <Loader />}
+        {error ? <Banner variant="error" icon={<AlertCircle size={16} />} title={t.loadFailed} description={error.msg} /> : <Loader />}
       </main>
     );
   }
@@ -53,9 +55,9 @@ export function AdminProjectPage({ id }: { id: string }) {
     try {
       const next = await api<ProjectSummary>(`/api/admin/projects/${id}`, { method: "PATCH", json: { status: p.status === "published" ? "draft" : "published" } });
       setDetail({ ...detail, project: next });
-      toast.add({ title: next.status === "published" ? "已发布，公开地址可以打开了" : "已取消发布，公开地址现在打不开" });
+      toast.add({ title: next.status === "published" ? t.publishedToast : t.unpublishedToast });
     } catch (e) {
-      toast.add({ title: "操作失败", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.actionFailed, description: errMsg(e), variant: "error" });
     } finally {
       setBusy(false);
     }
@@ -65,21 +67,21 @@ export function AdminProjectPage({ id }: { id: string }) {
     <main className="mx-auto grid max-w-6xl gap-5 px-5 py-8">
       <div className="grid gap-3">
         <div>
-          <Button variant="ghost" size="sm" icon={<ArrowLeft size={16} />} onClick={() => navigate("/admin")}>全部项目</Button>
+          <Button variant="ghost" size="sm" icon={<ArrowLeft size={16} />} onClick={() => navigate("/admin")}>{t.allProjects}</Button>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid min-w-0 gap-1">
             <div className="flex items-center gap-2">
               <Text variant="heading" as="h1" size="lg" truncate>{p.title}</Text>
-              {p.status === "published" ? <Badge variant="success">已发布</Badge> : <Badge variant="neutral">草稿</Badge>}
+              {p.status === "published" ? <Badge variant="success">{t.published}</Badge> : <Badge variant="neutral">{t.draft}</Badge>}
             </div>
             <div className="flex items-center gap-1">
-              <InlineCopyText value={publicUrl} labels={{ copyAction: "复制公开地址", copied: "已复制" }}>{publicUrl}</InlineCopyText>
+              <InlineCopyText value={publicUrl} labels={{ copyAction: t.copyPublicUrl, copied: t.copied }}>{publicUrl}</InlineCopyText>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={<ExternalLink size={16} />} disabled={p.status !== "published"} onClick={() => window.open(publicUrl, "_blank", "noopener")}>
-              打开公开页
+              {t.openPublicPage}
             </Button>
             <Button
               variant={p.status === "published" ? "secondary" : "primary"}
@@ -88,7 +90,7 @@ export function AdminProjectPage({ id }: { id: string }) {
               disabled={p.status !== "published" && p.imageCount === 0}
               onClick={togglePublish}
             >
-              {p.status === "published" ? "取消发布" : "发布"}
+              {p.status === "published" ? t.unpublish : t.publish}
             </Button>
           </div>
         </div>
@@ -98,9 +100,9 @@ export function AdminProjectPage({ id }: { id: string }) {
         value={tab}
         onValueChange={changeTab}
         tabs={[
-          { value: "images", label: `图片 ${detail.images.length}` },
-          { value: "codes", label: `获取码 ${p.codeCount}` },
-          { value: "settings", label: "设置" },
+          { value: "images", label: t.tabImages(detail.images.length) },
+          { value: "codes", label: t.tabCodes(p.codeCount) },
+          { value: "settings", label: t.tabSettings },
         ]}
       />
       {tab === "images" && <ImagesTab detail={detail} reload={load} />}

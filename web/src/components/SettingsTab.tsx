@@ -5,9 +5,11 @@ import { Trash2 } from "lucide-react";
 import type { ProjectSummary } from "../../../src/shared/types.ts";
 import { api, errMsg } from "../api.ts";
 import { navigate } from "../router.ts";
+import { useI18n } from "../i18n/index.ts";
 
 export function SettingsTab({ project, onSaved }: { project: ProjectSummary; onSaved: (p: ProjectSummary) => void }) {
   const toast = useKumoToastManager();
+  const { t } = useI18n();
   const [title, setTitle] = useState(project.title);
   const [slug, setSlug] = useState(project.slug);
   const [description, setDescription] = useState(project.description ?? "");
@@ -23,7 +25,7 @@ export function SettingsTab({ project, onSaved }: { project: ProjectSummary; onS
     try {
       const next = await api<ProjectSummary>(`/api/admin/projects/${project.id}`, { method: "PATCH", json: { title, slug, description } });
       onSaved(next);
-      toast.add({ title: "已保存" });
+      toast.add({ title: t.saved });
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -35,10 +37,10 @@ export function SettingsTab({ project, onSaved }: { project: ProjectSummary; onS
     setDeleting(true);
     try {
       await api(`/api/admin/projects/${project.id}`, { method: "DELETE" });
-      toast.add({ title: `已删除「${project.title}」` });
+      toast.add({ title: t.deletedProjectToast(project.title) });
       navigate("/admin");
     } catch (e) {
-      toast.add({ title: "删除失败", description: errMsg(e), variant: "error" });
+      toast.add({ title: t.deleteFailed, description: errMsg(e), variant: "error" });
       setDeleting(false);
     }
   };
@@ -54,37 +56,37 @@ export function SettingsTab({ project, onSaved }: { project: ProjectSummary; onS
           void save();
         }}
       >
-        <Input label="项目名" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <Input label={t.projectName} value={title} onChange={(e) => setTitle(e.target.value)} />
         <Input
-          label="短地址"
+          label={t.slug}
           value={slug}
           onChange={(e) => setSlug(e.target.value.toLowerCase())}
-          description={slugChanged ? "改了以后旧链接会打不开，发出去的链接要重新发。" : "小写字母、数字和横线。"}
+          description={slugChanged ? t.slugChangedWarn : t.slugHint}
         />
-        <InputArea aria-label="简介" placeholder="简介（可不填）" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+        <InputArea aria-label={t.description} placeholder={t.descriptionPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
         {error && <Text variant="error">{error}</Text>}
         <div>
-          <Button variant="primary" type="submit" loading={busy}>保存</Button>
+          <Button variant="primary" type="submit" loading={busy}>{t.save}</Button>
         </div>
       </form>
 
       <div className="grid gap-3 rounded-xl bg-kumo-base p-5 ring ring-kumo-line">
-        <Text variant="heading" as="h2">删除项目</Text>
-        <Text variant="secondary">原图、预览图、获取码和下载记录全部删掉，不能恢复。</Text>
+        <Text variant="heading" as="h2">{t.deleteProject}</Text>
+        <Text variant="secondary">{t.deleteProjectWarn}</Text>
         <div>
-          <Button variant="secondary-destructive" icon={<Trash2 size={16} />} onClick={() => setConfirm(true)}>删除项目</Button>
+          <Button variant="secondary-destructive" icon={<Trash2 size={16} />} onClick={() => setConfirm(true)}>{t.deleteProject}</Button>
         </div>
       </div>
 
       <Dialog.Root open={confirm} onOpenChange={setConfirm}>
         <Dialog size="base" className="px-6 py-5">
           <div className="grid gap-4">
-            <Dialog.Title className="text-base font-semibold">删除「{project.title}」？</Dialog.Title>
-            <Dialog.Description className="text-kumo-subtle">输入短地址 {project.slug} 确认。</Dialog.Description>
-            <Input aria-label="短地址" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
+            <Dialog.Title className="text-base font-semibold">{t.deleteProjectTitle(project.title)}</Dialog.Title>
+            <Dialog.Description className="text-kumo-subtle">{t.deleteProjectConfirm(project.slug)}</Dialog.Description>
+            <Input aria-label={t.slug} value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
             <div className="flex justify-end gap-2">
-              <Dialog.Close render={(p) => <Button {...p} variant="secondary">取消</Button>} />
-              <Button variant="destructive" loading={deleting} disabled={confirmText !== project.slug} onClick={remove}>删除</Button>
+              <Dialog.Close render={(p) => <Button {...p} variant="secondary">{t.cancel}</Button>} />
+              <Button variant="destructive" loading={deleting} disabled={confirmText !== project.slug} onClick={remove}>{t.delete}</Button>
             </div>
           </div>
         </Dialog>
