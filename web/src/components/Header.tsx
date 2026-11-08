@@ -109,7 +109,7 @@ export function Header({ admin }: { admin: boolean }) {
     <header className="sticky top-0 z-10 border-b border-kumo-line bg-kumo-base">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-5">
         <a href={admin ? "/admin" : "/"} onClick={linkClick(admin ? "/admin" : "/")} className="flex items-center gap-2">
-          <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
+          <img src="/icon-128.png" alt="" className="size-7" />
           <Text variant="heading" as="span">{t.appName}</Text>
           {admin && <Text variant="secondary" as="span">{t.adminBadge}</Text>}
         </a>
